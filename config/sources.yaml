@@ -1,0 +1,170 @@
+# ============================================================================
+#  ニュースソース定義
+# ----------------------------------------------------------------------------
+#  この環境からは外部サイトへの接続が制限されていたため、各URLの生死は
+#  未検証です。初回セットアップ時に必ず次のコマンドで疎通確認してください:
+#
+#      python -m newsdigest doctor
+#
+#  応答しないフィードは `enabled: false` にするか、行ごと削除してください。
+#  （パイプラインは死んだフィードを自動でスキップするため、放置しても
+#    配信自体は止まりません）
+# ============================================================================
+
+defaults:
+  timeout: 20                 # 1フィードあたりの取得タイムアウト（秒）
+  max_entries_per_feed: 30    # 1フィードから取り込む最大件数
+
+# ----------------------------------------------------------------------------
+# Google ニュース検索フィード
+#   キーワード検索の結果をRSSとして取得します。法学分野の網羅性を担保する
+#   主力ソースです。クエリを足すだけで守備範囲を広げられます。
+# ----------------------------------------------------------------------------
+google_news:
+  enabled: true
+  hl: ja          # 言語
+  gl: JP          # 地域
+  ceid: "JP:ja"   # 言語:地域
+
+  queries:
+    # ---- 法学・司法（重点分野：weight を高く設定） ----
+    - { q: "最高裁 判決",              name: "最高裁判決",         category: "法学・司法", weight: 2.4 }
+    - { q: "高裁 OR 地裁 判決",         name: "下級審判決",         category: "法学・司法", weight: 2.0 }
+    - { q: "法改正 施行",              name: "法改正・施行",       category: "法学・司法", weight: 2.2 }
+    - { q: "法案 国会 可決",           name: "立法動向",           category: "法学・司法", weight: 2.0 }
+    - { q: "民法 OR 刑法 OR 会社法 改正", name: "主要法典の改正",     category: "法学・司法", weight: 2.2 }
+    - { q: "個人情報保護法 OR プライバシー 規制", name: "個人情報・プライバシー", category: "法学・司法", weight: 2.0 }
+    - { q: "著作権 OR 特許 OR 商標 判決", name: "知的財産",          category: "法学・司法", weight: 2.0 }
+    - { q: "独占禁止法 OR 公正取引委員会", name: "競争法",            category: "法学・司法", weight: 2.0 }
+    - { q: "労働法 OR 労働基準法 OR 労働審判", name: "労働法",        category: "法学・司法", weight: 1.9 }
+    - { q: "憲法 訴訟 OR 違憲",         name: "憲法・違憲訴訟",     category: "法学・司法", weight: 2.2 }
+    - { q: "損害賠償 訴訟 判決",        name: "民事訴訟",           category: "法学・司法", weight: 1.8 }
+    - { q: "企業法務 OR コンプライアンス 法規制", name: "企業法務",   category: "法学・司法", weight: 1.9 }
+    - { q: "AI 規制 法律",             name: "AI法・テック規制",   category: "法学・司法", weight: 2.0 }
+    - { q: "弁護士 OR 検察 OR 司法制度", name: "司法制度",          category: "法学・司法", weight: 1.7 }
+    - { q: "パブリックコメント 省令 OR 政令", name: "行政立法",      category: "法学・司法", weight: 1.7 }
+    - { q: "legal ruling court decision", name: "海外法務(英語)",  category: "法学・司法", weight: 1.6 }
+
+    # ---- 一般分野 ----
+    - { q: "政治 政策",                name: "政治",               category: "政治・行政", weight: 1.0 }
+    - { q: "経済 市場",                name: "経済",               category: "経済・ビジネス", weight: 1.0 }
+    - { q: "国際 情勢",                name: "国際",               category: "国際",       weight: 1.0 }
+    - { q: "テクノロジー OR AI",        name: "テクノロジー",       category: "テクノロジー", weight: 1.0 }
+    - { q: "科学 研究 発表",           name: "科学",               category: "科学・医療", weight: 1.0 }
+    - { q: "医療 健康",                name: "医療",               category: "科学・医療", weight: 0.9 }
+    - { q: "社会 事件",                name: "社会",               category: "社会",       weight: 0.9 }
+    - { q: "文化 芸術 OR スポーツ",     name: "文化・スポーツ",     category: "文化・その他", weight: 0.7 }
+
+# ----------------------------------------------------------------------------
+# 個別RSSフィード
+# ----------------------------------------------------------------------------
+feeds:
+  # ---- 法学・司法（一次情報・官公庁） ----
+  - name: "裁判所 新着判例"
+    url: "https://www.courts.go.jp/rss/new_hanrei.xml"
+    category: "法学・司法"
+    weight: 2.6
+    enabled: true
+  - name: "e-Gov パブリックコメント"
+    url: "https://public-comment.e-gov.go.jp/rss/pcm_list.xml"
+    category: "法学・司法"
+    weight: 2.2
+    enabled: true
+  - name: "法務省 新着情報"
+    url: "https://www.moj.go.jp/rss/news.xml"
+    category: "法学・司法"
+    weight: 2.3
+    enabled: true
+  - name: "個人情報保護委員会"
+    url: "https://www.ppc.go.jp/rss/news.xml"
+    category: "法学・司法"
+    weight: 2.1
+    enabled: true
+  - name: "公正取引委員会 報道発表"
+    url: "https://www.jftc.go.jp/rss/houdou.xml"
+    category: "法学・司法"
+    weight: 2.1
+    enabled: true
+  - name: "消費者庁 新着情報"
+    url: "https://www.caa.go.jp/rss/news.xml"
+    category: "法学・司法"
+    weight: 1.9
+    enabled: true
+  - name: "金融庁 新着情報"
+    url: "https://www.fsa.go.jp/fsaNewsList_rss2.xml"
+    category: "法学・司法"
+    weight: 1.9
+    enabled: true
+  - name: "弁護士ドットコムニュース"
+    url: "https://www.bengo4.com/topics/feed/"
+    category: "法学・司法"
+    weight: 2.0
+    enabled: true
+
+  # ---- 総合・国内 ----
+  - name: "NHK 主要ニュース"
+    url: "https://www.nhk.or.jp/rss/news/cat0.xml"
+    category: "総合"
+    weight: 1.2
+    enabled: true
+  - name: "NHK 社会"
+    url: "https://www.nhk.or.jp/rss/news/cat1.xml"
+    category: "社会"
+    weight: 1.0
+    enabled: true
+  - name: "NHK 政治"
+    url: "https://www.nhk.or.jp/rss/news/cat4.xml"
+    category: "政治・行政"
+    weight: 1.1
+    enabled: true
+  - name: "NHK 経済"
+    url: "https://www.nhk.or.jp/rss/news/cat5.xml"
+    category: "経済・ビジネス"
+    weight: 1.0
+    enabled: true
+  - name: "NHK 国際"
+    url: "https://www.nhk.or.jp/rss/news/cat6.xml"
+    category: "国際"
+    weight: 1.0
+    enabled: true
+  - name: "NHK 科学・文化"
+    url: "https://www.nhk.or.jp/rss/news/cat3.xml"
+    category: "科学・医療"
+    weight: 1.0
+    enabled: true
+
+  # ---- テクノロジー ----
+  - name: "ITmedia NEWS"
+    url: "https://rss.itmedia.co.jp/rss/2.0/itmedia_all.xml"
+    category: "テクノロジー"
+    weight: 1.0
+    enabled: true
+  - name: "Publickey"
+    url: "https://www.publickey1.jp/atom.xml"
+    category: "テクノロジー"
+    weight: 0.9
+    enabled: true
+  - name: "Hacker News (front page)"
+    url: "https://hnrss.org/frontpage"
+    category: "テクノロジー"
+    weight: 0.8
+    enabled: true
+
+  # ---- 海外 ----
+  - name: "BBC News"
+    url: "https://feeds.bbci.co.uk/news/rss.xml"
+    category: "国際"
+    weight: 1.0
+    enabled: true
+  - name: "The Guardian World"
+    url: "https://www.theguardian.com/world/rss"
+    category: "国際"
+    weight: 0.9
+    enabled: true
+
+  # ---- 科学 ----
+  - name: "arXiv cs.AI"
+    url: "https://rss.arxiv.org/rss/cs.AI"
+    category: "科学・医療"
+    weight: 0.7
+    enabled: false      # 論文は量が多いため既定ではオフ

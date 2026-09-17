@@ -1,0 +1,9 @@
+# 本体（3つだけ）
+feedparser>=6.0.11      # RSS/Atom パース
+PyYAML>=6.0.1           # 設定ファイル読み込み
+anthropic>=0.40.0       # Claude API による要約生成
+
+# メモ:
+#  - Slack / Discord 配信は標準ライブラリ(urllib)で実装しているため追加依存なし
+#  - ANTHROPIC_API_KEY を設定しない場合、anthropic は未使用でも動作します
+#    （LLMを使わない簡易要約に自動フォールバック）

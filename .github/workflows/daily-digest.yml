@@ -1,0 +1,65 @@
+name: 毎朝8時のニュースダイジェスト
+
+on:
+  schedule:
+    # GitHub Actions の cron は UTC 指定。
+    # 23:00 UTC = 翌日 08:00 JST（日本時間の毎朝8時）
+    - cron: "0 23 * * *"
+  # 手動実行（動作確認用）
+  workflow_dispatch:
+    inputs:
+      no_deliver:
+        description: "配信せず生成だけ行う"
+        type: boolean
+        default: false
+
+# 同時実行を防ぐ（前回が長引いた場合に二重配信しないため）
+concurrency:
+  group: daily-digest
+  cancel-in-progress: false
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: 依存パッケージをインストール
+        run: pip install -r requirements.txt
+
+      - name: ダイジェストを生成して配信
+        env:
+          # --- 要約エンジン ---
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # --- 配信設定 ---
+          DIGEST_NOTIFIERS: ${{ vars.DIGEST_NOTIFIERS || 'email' }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          MAIL_FROM: ${{ secrets.MAIL_FROM }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          # --- 動作設定 ---
+          DIGEST_TIMEZONE: Asia/Tokyo
+          DIGEST_LOOKBACK_HOURS: "24"
+        run: |
+          python -m newsdigest run \
+            ${{ inputs.no_deliver && '--no-deliver' || '' }}
+
+      - name: 生成物を成果物として保存
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ github.run_number }}
+          path: archive/
+          retention-days: 30
+          if-no-files-found: ignore
