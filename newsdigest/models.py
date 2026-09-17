@@ -83,6 +83,7 @@ class Digest:
     # メタ情報
     total_collected: int = 0
     total_after_dedupe: int = 0
+    total_sources: int = 0              # 取得を試みたフィード総数
     failed_sources: list[str] = field(default_factory=list)
     engine: str = "claude"   # "claude" か "fallback"
 
@@ -123,6 +124,7 @@ class Digest:
             "stats": {
                 "total_collected": self.total_collected,
                 "total_after_dedupe": self.total_after_dedupe,
+                "total_sources": self.total_sources,
                 "failed_sources": self.failed_sources,
             },
         }

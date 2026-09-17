@@ -64,6 +64,7 @@ def build_digest(settings: Settings, now: datetime | None = None) -> Digest:
     )
     digest.total_collected = total_collected
     digest.total_after_dedupe = len(unique_articles)
+    digest.total_sources = len(specs)
     digest.failed_sources = failed
     return digest
 

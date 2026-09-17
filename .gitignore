@@ -8,5 +8,6 @@ venv/
 archive/*.html
 archive/*.md
 archive/*.json
+archive/index.html
 !archive/.gitkeep
 .cache/

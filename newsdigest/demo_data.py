@@ -91,4 +91,5 @@ def build_demo_digest(now: datetime) -> Digest:
     ]
     digest.total_collected = 312
     digest.total_after_dedupe = 187
+    digest.total_sources = 43
     return digest
