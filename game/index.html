@@ -1,0 +1,1193 @@
+<title>法廷の選択</title>
+<meta name="description" content="有名判例をもとにした民法・民事訴訟法の法廷シミュレーションゲーム">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@500;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<style>
+/* Layout: 一画面のビジュアルノベル。上=期日情報と心証メーター、中=法廷の舞台、下=発言ウィンドウ。単一の「夜の法廷（胡桃材）」の世界観で固定。 */
+:root{
+  --walnut:#1c1714;      /* 地: 法廷の胡桃材を暗くしたもの */
+  --panel:#26201b;       /* 面: 発言ウィンドウ・パネル */
+  --panel-2:#2f2721;
+  --line:#4a3d33;
+  --oak:#8a6446;         /* 法壇の木 */
+  --paper:#f1ebe0;       /* 書面（訴状・判決書） */
+  --paper-ink:#24201c;
+  --fg:#ece4d8;
+  --muted:#b3a593;
+  --verdigris:#6fb3a0;   /* アクセント: 緑青 */
+  --brass:#d2ac62;       /* メーター・弁護士バッジ */
+  --good:#7cc4a4; --ok:#8fb2d8; --meh:#e0b45c; --bad:#e07a6b;
+  --f-display:"Shippori Mincho B1","Hiragino Mincho ProN","Yu Mincho",serif;
+  --f-body:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic",system-ui,sans-serif;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{background:var(--walnut);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.75;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--verdigris);outline-offset:2px}
+#app{max-width:980px;margin:0 auto;padding-inline:16px;padding-block:12px 20px;min-height:100%;display:flex;flex-direction:column;gap:10px}
+
+/* ---------- タイトル画面 ---------- */
+.title-wrap{display:grid;gap:22px;padding-block:24px}
+.title-mark{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+.title-mark h1{font-family:var(--f-display);font-weight:800;font-size:clamp(40px,8vw,72px);letter-spacing:.08em;margin:0;line-height:1.1}
+.title-mark .sub{font-family:var(--f-display);color:var(--muted);letter-spacing:.2em;font-size:14px}
+.lede{max-width:62ch;color:var(--muted);margin:0}
+.chapters{display:grid;gap:12px}
+.chap{display:grid;grid-template-columns:auto 1fr auto;gap:16px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:16px 18px;text-align:left;cursor:pointer;transition:border-color .2s,background .2s}
+.chap:hover{border-color:var(--oak);background:var(--panel-2)}
+.chap .no{font-family:var(--f-display);font-size:30px;color:var(--oak);font-weight:800;min-width:2.2em;text-align:center}
+.chap h3{margin:0;font-family:var(--f-display);font-size:19px;letter-spacing:.04em}
+.chap .meta{font-size:12.5px;color:var(--muted);margin-top:2px}
+.chap .case{font-size:12.5px;color:var(--verdigris);margin-top:4px}
+.chap .best{font-family:var(--f-display);font-size:26px;min-width:1.6em;text-align:center;color:var(--brass)}
+.chap .best small{display:block;font-family:var(--f-body);font-size:10px;color:var(--muted);letter-spacing:.1em}
+.howto{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;font-size:13px;color:var(--muted)}
+.howto div{border-top:1px solid var(--line);padding-top:8px;min-width:0}
+.howto b{color:var(--fg);display:block;font-weight:700}
+.disclaimer{font-size:12px;color:var(--muted);border-top:1px solid var(--line);padding-top:10px}
+
+/* ---------- HUD ---------- */
+.hud{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;justify-content:space-between}
+.hud .where{min-width:0}
+.hud .court{font-family:var(--f-display);font-size:14px;letter-spacing:.06em}
+.hud .date{font-size:12px;color:var(--muted)}
+.meters{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.meter{display:grid;gap:2px;font-size:11px;color:var(--muted);letter-spacing:.06em;min-width:120px}
+.meter .bar{height:6px;background:#3a302a;border-radius:3px;overflow:hidden}
+.meter .bar i{display:block;height:100%;background:var(--brass);transition:width .6s ease}
+.meter.trust .bar i{background:var(--verdigris)}
+.hud-btns{display:flex;gap:6px}
+.ghost{background:transparent;border:1px solid var(--line);border-radius:4px;padding:3px 10px;font-size:12.5px;cursor:pointer;color:var(--muted)}
+.ghost:hover{color:var(--fg);border-color:var(--oak)}
+
+/* ---------- 舞台 ---------- */
+.stage{position:relative;aspect-ratio:16/8;max-width:100%;border-radius:6px;overflow:hidden;border:1px solid var(--line);background:#120f0d}
+.stage.slim{aspect-ratio:16/3.2}
+.stage svg.bg{position:absolute;inset:0;width:100%;height:100%}
+.stage .place{position:absolute;left:12px;top:10px;font-family:var(--f-display);font-size:13px;letter-spacing:.12em;background:rgba(20,16,13,.72);border:1px solid var(--line);padding:2px 10px;border-radius:3px}
+.portrait{position:absolute;bottom:0;height:88%;aspect-ratio:200/240;transition:opacity .25s,transform .25s}
+.portrait.right{right:4%}
+.portrait.left{left:4%}
+.portrait.hide{opacity:0;transform:translateY(6px)}
+.portrait svg{width:100%;height:100%;display:block}
+
+/* ---------- 発言ウィンドウ ---------- */
+.box{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:16px 18px 14px;min-height:150px;cursor:pointer}
+.box .name{position:absolute;top:-13px;left:14px;background:var(--oak);color:#fff8ee;font-family:var(--f-display);font-weight:700;font-size:14px;padding:1px 12px;border-radius:3px;letter-spacing:.08em}
+.box .name small{font-family:var(--f-body);font-weight:400;font-size:11px;opacity:.85;margin-left:6px}
+.box .text{font-size:16px;line-height:1.95;white-space:pre-wrap;max-width:68ch}
+.box .text.narr{color:var(--muted)}
+.box .next{position:absolute;right:14px;bottom:8px;font-size:11px;color:var(--muted);letter-spacing:.1em}
+.box .next::after{content:" ▼";animation:blink 1.2s infinite}
+@keyframes blink{50%{opacity:.2}}
+
+/* ---------- 書面 ---------- */
+.doc{background:var(--paper);color:var(--paper-ink);border-radius:3px;padding:20px 22px;font-family:var(--f-display);line-height:1.9;box-shadow:0 10px 30px rgba(0,0,0,.35);max-height:62vh;overflow:auto}
+.doc h4{text-align:center;font-size:20px;letter-spacing:.5em;margin:0 0 6px;font-weight:800}
+.doc .caseline{text-align:center;font-size:12.5px;margin-bottom:12px;font-family:var(--f-body)}
+.doc p{margin:.4em 0;font-size:15px}
+.doc .sec{font-weight:800;margin-top:.9em}
+.doc .stamp{display:inline-block;border:2px solid #b0392f;color:#b0392f;border-radius:50%;padding:6px 8px;font-size:12px;transform:rotate(-8deg);margin-left:8px}
+
+/* ---------- 選択肢 ---------- */
+.choice{display:grid;gap:12px}
+.choice .q{font-family:var(--f-display);font-size:17px;line-height:1.7;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--verdigris);padding:12px 16px;border-radius:4px}
+.choice .q .kind{display:inline-block;font-family:var(--f-body);font-size:11px;letter-spacing:.12em;color:var(--verdigris);border:1px solid var(--verdigris);border-radius:2px;padding:0 6px;margin-right:8px;vertical-align:2px}
+.opts{display:grid;gap:8px}
+.opt{display:grid;grid-template-columns:2em 1fr;gap:8px;text-align:left;background:var(--panel-2);border:1px solid var(--line);border-radius:4px;padding:11px 14px;cursor:pointer;line-height:1.7;transition:border-color .15s,transform .15s}
+.opt:hover{border-color:var(--brass);transform:translateX(2px)}
+.opt .k{font-family:var(--f-display);font-weight:800;color:var(--brass)}
+.opt span{min-width:0}
+
+/* ---------- 解説 ---------- */
+.fb{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:16px 18px;display:grid;gap:10px}
+.fb .head{display:flex;align-items:center;gap:12px}
+.fb .mark{font-family:var(--f-display);font-size:34px;line-height:1;width:1.2em;text-align:center}
+.fb .verdict{font-family:var(--f-display);font-size:18px;font-weight:700}
+.fb .delta{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.fb .pick{font-size:13.5px;color:var(--muted);border-left:2px solid var(--line);padding-left:10px}
+.fb .exp{max-width:70ch;white-space:pre-wrap}
+.laws{display:flex;flex-wrap:wrap;gap:6px}
+.law{font-size:12px;border:1px solid var(--verdigris);color:var(--verdigris);border-radius:2px;padding:0 7px}
+.g-best{color:var(--good)} .g-ok{color:var(--ok)} .g-meh{color:var(--meh)} .g-bad{color:var(--bad)}
+.primary{justify-self:end;background:var(--oak);color:#fff8ee;border:0;border-radius:4px;padding:8px 20px;font-family:var(--f-display);font-weight:700;letter-spacing:.1em;cursor:pointer}
+.primary:hover{filter:brightness(1.1)}
+
+/* ---------- 判決・結果 ---------- */
+.result{display:grid;gap:16px}
+.result .big{font-family:var(--f-display);font-weight:800;font-size:clamp(34px,7vw,56px);letter-spacing:.2em;text-align:center;margin:6px 0 0}
+.big.win{color:var(--good)} .big.mid{color:var(--meh)} .big.lose{color:var(--bad)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:10px 14px}
+.stat .l{font-size:11px;color:var(--muted);letter-spacing:.1em}
+.stat .v{font-family:var(--f-display);font-size:26px;font-variant-numeric:tabular-nums}
+.review{display:grid;gap:6px}
+.review .row{display:grid;grid-template-columns:1.6em 1fr;gap:8px;font-size:13.5px;border-bottom:1px solid var(--line);padding-block:6px}
+.review .row div{min-width:0}
+.notes{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 18px}
+.notes h4{margin:0 0 6px;font-family:var(--f-display)}
+.notes li{margin-bottom:6px}
+.btnrow{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+
+/* ---------- モーダル ---------- */
+.modal{position:fixed;inset:0;background:rgba(8,6,5,.72);display:flex;align-items:center;justify-content:center;padding:16px;z-index:10}
+.modal .card{background:var(--panel);border:1px solid var(--line);border-radius:6px;max-width:720px;width:100%;max-height:84vh;overflow:auto;padding:18px 20px}
+.modal h3{margin:0 0 10px;font-family:var(--f-display)}
+.modal dl{margin:0;display:grid;gap:10px}
+.modal dt{font-weight:700;color:var(--verdigris)}
+.modal dd{margin:2px 0 0;color:var(--fg);font-size:14px}
+.logline{font-size:13.5px;border-bottom:1px solid var(--line);padding-block:5px}
+.logline b{color:var(--brass);font-weight:500;margin-right:6px}
+
+.fade-in{animation:fi .35s ease both}
+@keyframes fi{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+@media (max-width:560px){
+  .stage{aspect-ratio:16/10}
+  .box .text{font-size:15px}
+  .chap{grid-template-columns:auto 1fr}
+  .chap .best{grid-column:2;text-align:left}
+  .meter{min-width:96px}
+}
+</style>
+
+<div id="app"></div>
+
+<script>
+"use strict";
+/* =====================================================================
+   キャラクター
+   ===================================================================== */
+const CAST = {
+  me:      {name:"朝倉 遥", role:"弁護士（1年目）", skin:"#e9c9a8", hair:"#2a201b", style:"bob", attire:"#2d3442", badge:true},
+  boss:    {name:"鷹野 誠一郎", role:"所長弁護士", skin:"#e2c09c", hair:"#bdb6ad", style:"swept", attire:"#3a3330", badge:true, glasses:true},
+  clerk:   {name:"野々村", role:"裁判所書記官", skin:"#ecccad", hair:"#3b2c22", style:"short", attire:"#4a4f57"},
+  // 第1章
+  j1:      {name:"三宅 澄江", role:"裁判官・東京地裁民事第28部", skin:"#ebcaa9", hair:"#231b17", style:"long", attire:"#111", robe:true, glasses:true},
+  opp1:    {name:"黒須 剛", role:"原告代理人弁護士", skin:"#d9b38f", hair:"#151210", style:"slick", attire:"#1d1f26", badge:true},
+  c1:      {name:"坂本 源治", role:"依頼人・株式会社坂本青果 代表取締役", skin:"#d7ad86", hair:"#6f6a64", style:"crop", attire:"#5b6b4b"},
+  p1:      {name:"大河内 正臣", role:"原告・建物所有者", skin:"#e0bd98", hair:"#d8d4ce", style:"bald", attire:"#5a4636"},
+  // 第2章
+  j2:      {name:"北条 隆", role:"裁判長・横浜地裁第6民事部", skin:"#e3c19d", hair:"#8d877f", style:"swept", attire:"#111", robe:true},
+  opp2:    {name:"入江 千尋", role:"原告代理人弁護士", skin:"#efd1b2", hair:"#3a241a", style:"long", attire:"#2c2730", badge:true, glasses:true},
+  c2:      {name:"藤堂 聡", role:"依頼人・被告", skin:"#e4c19e", hair:"#1e1915", style:"short", attire:"#3e4a5c"},
+  p2:      {name:"白石 和枝", role:"原告", skin:"#efd3b8", hair:"#cfc8c2", style:"bun", attire:"#6a4f5e"},
+  makabe:  {name:"真壁 光男", role:"元不動産業者", skin:"#d8b28c", hair:"#2b2420", style:"slick", attire:"#4b4038"},
+  // 第3章
+  j3:      {name:"葛西 恭平", role:"裁判官・さいたま地裁第4民事部", skin:"#e5c3a0", hair:"#1b1714", style:"crop", attire:"#111", robe:true, glasses:true},
+  opp3:    {name:"権藤 達也", role:"被告代理人弁護士", skin:"#d6ae88", hair:"#2a2622", style:"swept", attire:"#262a22", badge:true},
+  c3:      {name:"森川 早苗", role:"依頼人・原告", skin:"#efcfae", hair:"#2c1f19", style:"bob", attire:"#58705f"},
+  tadokoro:{name:"田所 義男", role:"本件土地の元所有者", skin:"#d5ac85", hair:"#e3dfd9", style:"bald", attire:"#5d5446"},
+  arima:   {name:"有馬 健吾", role:"被告・不動産仲介業", skin:"#dcb48d", hair:"#0f0d0c", style:"slick", attire:"#3b2a3f"},
+};
+
+function hairPath(style, c){
+  switch(style){
+    case "bob":   return `<path d="M58 104 Q54 52 100 48 Q146 52 142 104 L142 128 Q136 132 132 126 L132 92 Q118 72 100 72 Q80 72 68 92 L68 126 Q64 132 58 128 Z" fill="${c}"/>`;
+    case "long":  return `<path d="M56 110 Q52 50 100 46 Q148 50 144 110 L148 176 Q136 182 130 168 L132 96 Q118 74 100 74 Q82 74 68 96 L70 168 Q64 182 52 176 Z" fill="${c}"/>`;
+    case "bun":   return `<circle cx="100" cy="46" r="16" fill="${c}"/><path d="M62 100 Q60 58 100 56 Q140 58 138 100 Q130 78 100 76 Q70 78 62 100 Z" fill="${c}"/>`;
+    case "swept": return `<path d="M62 98 Q58 56 104 52 Q142 54 140 92 Q128 70 100 72 Q82 70 72 82 Q66 90 62 98 Z" fill="${c}"/>`;
+    case "slick": return `<path d="M62 96 Q62 54 100 52 Q140 54 138 96 Q132 74 112 70 Q92 66 74 76 Q66 84 62 96 Z" fill="${c}"/>`;
+    case "crop":  return `<path d="M64 92 Q64 56 100 54 Q136 56 136 92 Q128 74 100 72 Q72 74 64 92 Z" fill="${c}"/>`;
+    case "bald":  return `<path d="M62 106 Q60 92 66 86 L66 104 Z M138 106 Q140 92 134 86 L134 104 Z" fill="${c}"/>`;
+    default:      return `<path d="M62 96 Q60 54 100 52 Q140 54 138 96 Q130 72 100 70 Q70 72 62 96 Z" fill="${c}"/>`;
+  }
+}
+function portraitSVG(id){
+  const c = CAST[id]; if(!c) return "";
+  const collar = c.robe
+    ? `<path d="M76 160 Q100 176 124 160 L124 152 Q100 166 76 152 Z" fill="#000"/>`
+    : `<path d="M84 158 L100 190 L116 158 Z" fill="#f2efe9"/><path d="M97 166 L103 166 L105 196 L100 204 L95 196 Z" fill="${c.badge ? '#5a2430' : '#2e3a46'}"/>`;
+  const badge = c.badge
+    ? `<g transform="translate(140 196)"><circle r="7" fill="#d2ac62"/><circle r="3" fill="#8a6a2a"/>${[...Array(8)].map((_,i)=>`<rect x="-1" y="-10" width="2" height="4" fill="#d2ac62" transform="rotate(${i*45})"/>`).join("")}</g>` : "";
+  const glasses = c.glasses
+    ? `<g fill="none" stroke="#1a1512" stroke-width="2"><circle cx="85" cy="104" r="9"/><circle cx="115" cy="104" r="9"/><path d="M94 104 L106 104"/></g>` : "";
+  return `<svg viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    ${c.style==="long" ? hairPath("long", c.hair) : ""}
+    <path d="M18 240 Q24 170 100 158 Q176 170 182 240 Z" fill="${c.attire}"/>
+    ${c.robe ? `<path d="M18 240 Q24 170 100 158 Q176 170 182 240 Z" fill="#0d0d0f"/><path d="M60 180 Q100 196 140 180" stroke="#222" stroke-width="2" fill="none"/>` : ""}
+    <rect x="88" y="136" width="24" height="26" fill="${c.skin}"/>
+    ${collar}
+    <ellipse cx="100" cy="102" rx="38" ry="46" fill="${c.skin}"/>
+    <ellipse cx="62" cy="106" rx="5" ry="9" fill="${c.skin}"/><ellipse cx="138" cy="106" rx="5" ry="9" fill="${c.skin}"/>
+    ${c.style==="long" ? "" : hairPath(c.style, c.hair)}
+    ${c.style==="long" ? `<path d="M62 96 Q60 52 100 50 Q140 52 138 96 Q126 72 100 72 Q74 72 62 96 Z" fill="${c.hair}"/>` : ""}
+    <path d="M78 92 Q85 88 92 91 M108 91 Q115 88 122 92" stroke="#2a1f19" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+    <ellipse cx="85" cy="104" rx="3" ry="3.6" fill="#1d1612"/><ellipse cx="115" cy="104" rx="3" ry="3.6" fill="#1d1612"/>
+    <path d="M100 108 Q97 120 101 122" stroke="#b58b6a" stroke-width="2" fill="none"/>
+    <path d="M90 132 Q100 136 110 132" stroke="#8f5b4a" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+    ${glasses}${badge}
+  </svg>`;
+}
+
+/* =====================================================================
+   背景（SVG）
+   ===================================================================== */
+function bgSVG(kind, opt={}){
+  const W=800,H=400;
+  if(kind==="court"){
+    const seats = opt.panel ? [300,400,500] : [400];
+    return `<svg class="bg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <rect width="${W}" height="${H}" fill="#3b2a1e"/>
+      ${[...Array(20)].map((_,i)=>`<rect x="${i*40}" y="0" width="38" height="230" fill="${i%2?'#4a3424':'#45301f'}"/>`).join("")}
+      <rect x="0" y="226" width="${W}" height="6" fill="#2a1c12"/>
+      ${seats.map(x=>`<rect x="${x-26}" y="52" width="52" height="90" rx="6" fill="#1e1510"/><rect x="${x-22}" y="56" width="44" height="80" rx="5" fill="#5a1f22"/>`).join("")}
+      <rect x="150" y="128" width="500" height="70" fill="#8a6446"/><rect x="150" y="128" width="500" height="8" fill="#a07a58"/>
+      ${[...Array(10)].map((_,i)=>`<rect x="${158+i*50}" y="142" width="42" height="50" fill="#7a573b"/>`).join("")}
+      <rect x="250" y="198" width="300" height="48" fill="#6e4f36"/><rect x="250" y="198" width="300" height="6" fill="#8a6446"/>
+      <text x="400" y="228" fill="#d9c9b0" font-size="11" text-anchor="middle" font-family="serif" opacity=".7">書記官席</text>
+      <rect x="0" y="246" width="${W}" height="154" fill="#2c211a"/>
+      <rect x="30" y="268" width="210" height="60" fill="#7a573b"/><rect x="30" y="268" width="210" height="6" fill="#9a7452"/>
+      <rect x="560" y="268" width="210" height="60" fill="#7a573b"/><rect x="560" y="268" width="210" height="6" fill="#9a7452"/>
+      <text x="135" y="303" fill="#efe2cc" font-size="13" text-anchor="middle" font-family="serif" opacity=".75">原告席</text>
+      <text x="665" y="303" fill="#efe2cc" font-size="13" text-anchor="middle" font-family="serif" opacity=".75">被告席</text>
+      <rect x="370" y="290" width="60" height="44" fill="#6e4f36"/><rect x="384" y="278" width="32" height="14" fill="#2d2d2d"/>
+      <text x="400" y="320" fill="#efe2cc" font-size="11" text-anchor="middle" font-family="serif" opacity=".75">証言台</text>
+      <rect x="0" y="360" width="${W}" height="40" fill="#1a1410"/>
+      <rect x="0" y="352" width="${W}" height="8" fill="#5e4430"/>
+    </svg>`;
+  }
+  if(kind==="prep"){
+    return `<svg class="bg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <rect width="${W}" height="${H}" fill="#cfc7b8"/>
+      <rect x="0" y="260" width="${W}" height="140" fill="#6c6a64"/>
+      <rect x="520" y="40" width="220" height="150" fill="#e7eef0"/>
+      ${[...Array(12)].map((_,i)=>`<rect x="520" y="${44+i*12}" width="220" height="5" fill="#c9d2d6"/>`).join("")}
+      <rect x="60" y="50" width="300" height="150" fill="#f4f4f1" stroke="#9e9a92" stroke-width="4"/>
+      <text x="80" y="90" fill="#3a5a8a" font-size="16" font-family="sans-serif">争点整理</text>
+      <path d="M80 110 H300 M80 140 H260 M80 170 H220" stroke="#8aa0c0" stroke-width="3"/>
+      <ellipse cx="400" cy="320" rx="300" ry="60" fill="#8b7155"/><ellipse cx="400" cy="312" rx="300" ry="58" fill="#a1866a"/>
+      <text x="40" y="30" fill="#5a554c" font-size="12" font-family="sans-serif">弁論準備手続室</text>
+    </svg>`;
+  }
+  if(kind==="hall"){
+    return `<svg class="bg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <rect width="${W}" height="${H}" fill="#b9b2a6"/>
+      <rect x="0" y="290" width="${W}" height="110" fill="#5a544c"/>
+      <rect x="80" y="70" width="140" height="220" fill="#6b4c34"/><rect x="88" y="78" width="124" height="204" fill="#7d5a3e"/>
+      <rect x="96" y="40" width="108" height="24" fill="#2b2b2b"/><text x="150" y="57" fill="#f0e6d0" font-size="13" text-anchor="middle" font-family="serif">第709号法廷</text>
+      <rect x="300" y="80" width="200" height="150" fill="#f4f1ea" stroke="#777" stroke-width="3"/>
+      <text x="400" y="104" fill="#222" font-size="14" text-anchor="middle" font-family="serif">開 廷 表</text>
+      ${[0,1,2,3,4].map(i=>`<path d="M318 ${124+i*20} H482" stroke="#999" stroke-width="2"/>`).join("")}
+      <rect x="580" y="70" width="140" height="220" fill="#6b4c34"/><rect x="588" y="78" width="124" height="204" fill="#7d5a3e"/>
+      <rect x="596" y="40" width="108" height="24" fill="#2b2b2b"/><text x="650" y="57" fill="#f0e6d0" font-size="13" text-anchor="middle" font-family="serif">第710号法廷</text>
+      <rect x="0" y="282" width="${W}" height="8" fill="#8a8277"/>
+    </svg>`;
+  }
+  // office
+  const spines = ["#7a2a24","#24384f","#6d5a2a","#2f4a3a","#5a2a4a","#7a2a24","#3a3a3a","#8a6a3a"];
+  return `<svg class="bg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <rect width="${W}" height="${H}" fill="#2f2823"/>
+    <rect x="470" y="30" width="290" height="200" fill="#8fb0c8"/>
+    <rect x="470" y="30" width="290" height="200" fill="url(#sky)"/>
+    <defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9ec0d6"/><stop offset="1" stop-color="#d9e2e3"/></linearGradient></defs>
+    ${[[490,120,40,110],[540,90,36,140],[590,140,50,90],[650,70,34,160],[700,110,44,120]].map(([x,y,w,h])=>`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#6f8496"/>`).join("")}
+    <rect x="610" y="30" width="6" height="200" fill="#2f2823"/><rect x="470" y="126" width="290" height="6" fill="#2f2823"/>
+    <rect x="30" y="20" width="380" height="250" fill="#4a3526"/>
+    ${[0,1,2,3].map(r=>`<rect x="38" y="${28+r*60}" width="364" height="52" fill="#2a1d14"/>`+[...Array(22)].map((_,i)=>`<rect x="${42+i*16}" y="${34+r*60}" width="13" height="46" fill="${spines[(i+r*3)%spines.length]}"/>`).join("")).join("")}
+    <rect x="0" y="300" width="${W}" height="100" fill="#3a2c22"/>
+    <rect x="80" y="290" width="640" height="24" fill="#6b4a32"/>
+  </svg>`;
+}
+
+/* =====================================================================
+   シナリオ記述用ヘルパ
+   ===================================================================== */
+const S  = (who, text) => ({t:"say", who, text});
+const N  = (text) => ({t:"narr", text});
+const SC = (bg, place, date, extra={}) => ({t:"scene", bg, place, date, ...extra});
+const DOC= (title, caseline, html) => ({t:"doc", title, caseline, html});
+const IF = (flag, then, els=[]) => ({t:"if", flag, then, els});
+const Q  = (o) => ({t:"choice", ...o});
+// 評価: best=◎ ok=○ meh=△ bad=✕
+const G = {best:{m:"◎",l:"最善手",c:"g-best"}, ok:{m:"○",l:"悪くない",c:"g-ok"}, meh:{m:"△",l:"不十分",c:"g-meh"}, bad:{m:"✕",l:"悪手",c:"g-bad"}};
+
+/* =====================================================================
+   第1章　無断転貸と信頼関係（最判昭和28年9月25日ほか）
+   ===================================================================== */
+const CH1 = {
+  id:"ch1", no:"一", title:"八百屋の看板", court:"東京地方裁判所 民事第28部",
+  caseName:"令和8年(ワ)第3127号 建物明渡等請求事件",
+  basis:"最判昭和28年9月25日（信頼関係破壊法理）／最判昭和41年1月27日（特段の事情の立証責任）／最判昭和39年11月19日（個人営業の法人化）",
+  role:"被告（賃借人）代理人",
+  threshold:{win:95, mid:72}, keyFlag:"tokudan",
+  nodes:[
+    SC("office","鷹野法律事務所","令和8年4月6日（月）"),
+    N("東京・虎ノ門。弁護士登録から半年。あなたは所長の鷹野から、初めて「主任」で事件を任されることになった。"),
+    S("boss","朝倉君。今日から君が主任だ。依頼人は坂本さん。墨田区の商店街で三十年、八百屋をやっている方だよ。"),
+    S("c1","先生、よろしくお願いします……。大家の大河内さんから、いきなり店を出ていけって訴えられちまって。"),
+    S("me","まず事情を伺います。お店の建物は大河内さんから借りているんですね。"),
+    S("c1","ええ、平成8年からずっとです。家賃は月25万。一度も遅れたことはねえ。\n去年の秋、税理士に勧められて、店を『株式会社坂本青果』にしたんです。株主は俺と女房だけ、店も従業員も前と同じですよ。"),
+    S("c1","そしたら大河内さんから『会社に無断で又貸しした。契約違反だから解除する』って内容証明が来て……今度は裁判だ。"),
+    S("boss","大河内さんは、土地ごと売ってマンションにしたい、という話が前からあったそうだ。……さて、これが届いた訴状だ。"),
+    DOC("訴　　状","令和8年(ワ)第3127号　建物明渡等請求事件",`
+      <p>原告　大河内 正臣　　原告訴訟代理人弁護士　黒須 剛</p>
+      <p>被告　坂本 源治</p>
+      <p class="sec">第1　請求の趣旨</p>
+      <p>1　被告は、原告に対し、別紙物件目録記載の建物を明け渡せ。</p>
+      <p>2　被告は、原告に対し、令和8年2月1日から明渡し済みまで1か月25万円の割合による金員を支払え。</p>
+      <p>3　訴訟費用は被告の負担とする。　との判決並びに仮執行の宣言を求める。</p>
+      <p class="sec">第2　請求の原因</p>
+      <p>1　原告は被告に対し、平成8年4月1日、本件建物を賃料月額25万円で賃貸し、引き渡した。</p>
+      <p>2　被告は、令和7年10月頃、原告の承諾なく、本件建物を株式会社坂本青果に転貸し、同社に使用収益させている。</p>
+      <p>3　原告は被告に対し、令和8年1月20日到達の書面で、民法612条2項に基づき本件賃貸借契約を解除する旨の意思表示をした。</p>
+      <p style="text-align:right;margin-top:12px">第1回口頭弁論期日　令和8年5月14日 午前10時30分　第709号法廷</p>`),
+    S("boss","第1回期日は5月14日。裁判所が原告とだけ日程を調整して決めた日だ。その日、私は大阪で別の証人尋問が入っている。君も同じ日の午前に、別件の期日がある。"),
+    Q({id:"c1q1", kind:"手続", prompt:"訴状と期日呼出状が届いた。第1回口頭弁論期日（5月14日）にどう備えるか。",
+      opts:[
+        {k:"A", label:"期限までに答弁書を提出する。「請求の棄却を求める。請求原因に対する認否と被告の主張は、追って準備書面で明らかにする」と記載し、当日出頭できない場合は書記官に連絡しておく。", g:"best", d:10, t:5,
+         exp:"被告が最初の期日に欠席しても、提出した答弁書は陳述したものとみなされます（民訴158条）。第1回期日は被告の都合を聞かずに指定されるため、実務では「追って認否」とする答弁書を出して期日に対応するのが一般的です。答弁書の記載事項は民訴規則80条が定めています。",
+         laws:["民訴158条","民訴規則80条"]},
+        {k:"B", label:"書面は出さず、期日当日に法廷へ行って口頭で反論すれば足りる。", g:"meh", d:-4, t:0,
+         exp:"出頭して争えば擬制自白は避けられます。ただ、民訴規則79条・80条は答弁書の提出を予定しており、別件と重なって遅刻や欠席をすれば、何も陳述していない状態で弁論が終結されるおそれがあります（民訴159条3項）。リスクを取る理由のない選択です。",
+         laws:["民訴159条3項","民訴規則79条"]},
+        {k:"C", label:"依頼人との方針がまだ固まっていない。方針が決まるまで、裁判所には何も出さず期日も様子を見る。", g:"bad", fatal:true,
+         exp:"被告が答弁書を出さずに最初の期日に欠席すると、原告の主張した事実を自白したものとみなされます（民訴159条3項・1項）。裁判所はその日に弁論を終結し、原告の請求をすべて認める判決（いわゆる欠席判決）を言い渡せます。仮執行宣言が付けば、控訴しても明渡しの強制執行が可能になります。",
+         laws:["民訴159条1項・3項","民訴254条1項1号","民訴259条"],
+         over:"令和8年5月14日、被告欠席のまま弁論は終結し、同日、請求認容判決が言い渡された。\n主文「被告は、原告に対し、別紙物件目録記載の建物を明け渡せ。……この判決は仮に執行することができる。」\n坂本さんの店のシャッターに、執行官の公示書が貼られた。"}
+      ]}),
+    SC("court","東京地裁 第709号法廷","令和8年5月14日（木）午前10時30分"),
+    N("霞が関・東京地方裁判所。民事事件の法廷は、傍聴席から見て左が原告席、右が被告席。法壇の中央に、単独体の裁判官が座っている。"),
+    S("clerk","令和8年(ワ)第3127号、建物明渡等請求事件。"),
+    S("j1","原告は訴状のとおり陳述、被告は答弁書のとおり陳述でよろしいですね。"),
+    S("opp1","陳述します。"),
+    S("me","陳述します。被告の具体的な主張は、次回までに準備書面で提出します。"),
+    S("j1","争点整理のため、本件は弁論準備手続に付したいと考えます。当事者のご意見は。"),
+    S("opp1","原告に異論はありません。"),
+    S("me","被告も異論ありません。"),
+    S("j1","では弁論準備手続に付します（民訴168条）。被告は認否と主張を、6月25日までに準備書面で提出してください。"),
+    SC("office","鷹野法律事務所","令和8年5月下旬"),
+    S("boss","さて、認否だ。原告の主張は①賃貸借契約の締結と引渡し、②会社への転貸と使用収益、③解除の意思表示。坂本さんの話と食い違うところはあるかね。"),
+    S("me","契約、引渡し、解除通知の到達は事実です。会社が店を使っていることも、その通りです。"),
+    S("boss","そこで、どう書くかだ。"),
+    Q({id:"c1q2", kind:"主張", prompt:"第1準備書面で、請求原因に対する認否と被告の主張をどう組み立てるか。",
+      opts:[
+        {k:"A", label:"すべて否認する。ひとつでも認めれば不利になるので、とにかく全面的に争う姿勢を示す。", g:"bad", d:-12, t:-5,
+         exp:"当事者は信義に従い誠実に訴訟を追行しなければなりません（民訴2条）。明らかな事実まで否認しても、書証一つで崩れ、裁判所の信頼を失うだけです。しかも否認だけでは、612条2項の解除を阻止する事情が何も主張されていない状態のままです。",
+         laws:["民訴2条"]},
+        {k:"B", label:"契約・引渡し・解除の意思表示、会社が使用している事実は認める。そのうえで、法人化の経緯、株主構成、営業実態に変化がないことなど具体的事実を挙げ、抗弁として「背信的行為と認めるに足りない特段の事情」を主張する。", g:"best", d:14, t:5, flag:"tokudan",
+         exp:"判例は、無断転貸があっても「賃貸人に対する背信的行為と認めるに足らない特段の事情」があるときは、612条2項の解除権は発生しないとしました（最判昭和28年9月25日、信頼関係破壊法理）。個人営業を実質そのまま会社組織にした事案では、特段の事情があるとされています（最判昭和39年11月19日）。\n争いのない事実は認め（自白・民訴179条）、勝負どころを特段の事情という抗弁に絞るのが正しい組み立てです。",
+         laws:["民法612条","最判昭和28年9月25日","最判昭和39年11月19日","民訴179条"]},
+        {k:"C", label:"原告の主張をすべて認めたうえで、「坂本さんは30年間まじめに賃料を払ってきた。追い出すのは酷だ」と情に訴える。", g:"bad", d:-10, t:0,
+         exp:"請求原因をすべて自白し、それを覆す法律上の主張（抗弁）を出さなければ、裁判所は請求を認容するしかありません。民事訴訟には刑事裁判のような「情状」による減軽はありません。長年の誠実な賃料支払いは、抗弁（特段の事情）を支える具体的事実として主張してはじめて意味を持ちます。",
+         laws:["民訴179条","弁論主義"]}
+      ]}),
+    SC("prep","東京地裁 弁論準備手続室","令和8年7月2日（木）"),
+    N("弁論準備手続は法廷ではなく、楕円形のテーブルを囲む小部屋で行われる。裁判官もここでは法服を着ていない。"),
+    S("opp1","被告は特段の事情を主張しておられますが、念のため申し上げます。信頼関係を破壊しない特段の事情は、被告の側で主張立証すべきものです。"),
+    S("j1","被告代理人、この点についてのご意見は。"),
+    Q({id:"c1q3", kind:"証明責任", prompt:"「特段の事情」の主張立証責任は誰にあるか。裁判官に答える。",
+      opts:[
+        {k:"A", label:"「信頼関係の破壊は解除の要件だから、背信性は原告が立証すべきです」と争い、被告からの立証は控える。", g:"bad", d:-12, t:0,
+         exp:"判例は、背信的行為と認めるに足りない特段の事情の存在は、賃借人側が主張立証責任を負うとしています（最判昭和41年1月27日）。612条は承諾のない転貸を解除原因とし、特段の事情はその効果を妨げる例外だからです。立証を控えれば、事実が真偽不明に終わったときに被告が負けます。",
+         laws:["最判昭和41年1月27日","証明責任"]},
+        {k:"B", label:"「特段の事情の主張立証責任が被告にあることは争いません。被告において書証と人証で立証します」と答え、立証計画を示す。", g:"best", d:10, t:3,
+         exp:"そのとおりです（最判昭和41年1月27日）。証明責任の所在を正しく理解したうえで立証計画を示すと、争点整理が進み、裁判所にも「この代理人は分かっている」と伝わります。",
+         laws:["最判昭和41年1月27日"]},
+        {k:"C", label:"「証明責任をどう分けるかは裁判所が決めることなので、被告として意見はありません」と答える。", g:"meh", d:-3, t:0,
+         exp:"証明責任は法の解釈で決まるもので、裁判所がその場で自由に決めるものではありません。意見を述べないと、自分の側で何を立証すべきか分かっていないと受け取られます。",
+         laws:["証明責任"]}
+      ]}),
+    S("j1","では被告は、特段の事情を基礎づける書証を次回までに提出してください。"),
+    SC("office","鷹野法律事務所","令和8年7月中旬"),
+    S("c1","先生、証拠っていっても何を出せばいいんですか。商店街の連中なら、いくらでも署名を集めてくれますよ。"),
+    Q({id:"c1q4", kind:"立証", prompt:"特段の事情を立証するため、どの書証を中心に据えるか。",
+      opts:[
+        {k:"A", label:"会社の履歴事項全部証明書、株主名簿（坂本夫妻のみ）、法人化の前後で変わらない店舗の写真と従業員名簿、会社口座からの賃料振込記録。", g:"best", d:12, t:3,
+         exp:"特段の事情を基礎づけるのは「賃借人と使用者の実質的同一性」「使用態様が変わっていないこと」「賃料の支払状況」といった客観的事実です。登記事項証明書や振込記録は、作成経緯から信用性が高い書証です。",
+         laws:["民訴219条（書証の申出）"]},
+        {k:"B", label:"商店街の住民30人分の「坂本さんは誠実な人です」という署名。", g:"meh", d:-2, t:2,
+         exp:"人柄の評判は、賃貸人と賃借人の信頼関係が壊れたかどうかという争点との関連性が薄く、証拠としての価値は低いと評価されます。依頼人の気持ちは汲めますが、中心に据える証拠ではありません。",
+         laws:["証拠の関連性"]},
+        {k:"C", label:"大河内さんがマンション建築を計画していることを示す、不動産業者の企画書のコピーだけ。", g:"meh", d:0, t:0,
+         exp:"原告の本当の動機を示す事情として間接的な意味はありますが、特段の事情（被告側の事情）そのものは立証できません。これだけでは被告が負う証明責任を果たせません。",
+         laws:["証明責任"]}
+      ]}),
+    SC("court","東京地裁 第709号法廷","令和8年10月8日（木）午後1時30分　当事者尋問"),
+    N("証拠調べの期日。原告本人・大河内正臣が証言台に立ち、宣誓を終えた。黒須弁護士の主尋問が終わり、裁判官があなたを見た。"),
+    S("j1","被告代理人、反対尋問をどうぞ。"),
+    Q({id:"c1q5", kind:"尋問", prompt:"原告本人・大河内に対する反対尋問。最初の質問を選ぶ。",
+      opts:[
+        {k:"A", label:"「会社設立後の約3か月間、振込名義が『カ）サカモトセイカ』に変わった賃料を、あなたは異議を述べずに受け取っていましたね？」", g:"best", d:12, t:2, flag:"rent",
+         exp:"反対尋問では、主尋問に現れた事項に関連する事項や証言の信用性について尋ねることができ（民訴規則114条1項）、必要があれば誘導尋問も許されます（同115条2項ただし書）。会社名義の賃料を異議なく受け取っていた事実は、背信性がないこと（黙示の容認）を強く推認させます。答えが一つしかない、確実に「はい」を引き出せる質問です。",
+         laws:["民訴規則114条","民訴規則115条2項"]},
+        {k:"B", label:"「あなたはマンションを建てたいから、坂本さんを追い出したいだけなんでしょう？」", g:"ok", d:3, t:1,
+         exp:"動機は証言の信用性に関係するので、まったく無意味ではありません。ただ、評価を押し付ける議論的な質問で、相手は否定するだけです（民訴規則115条2項各号の制限に触れるとして異議を出されるおそれもあります）。反対尋問では、否定しようのない客観的事実を一つずつ認めさせる方が効果的です。",
+         laws:["民訴規則115条2項"]},
+        {k:"C", label:"「坂本さんのお店の野菜は、おいしいと思いませんか？」", g:"bad", d:-8, t:-2,
+         exp:"争点と関係のない質問は、裁判長（単独体では裁判官）に制限されます（民訴規則115条1項・3項）。尋問時間を無駄にし、心証も悪くなります。",
+         laws:["民訴規則115条1項"]}
+      ]}),
+    IF("rent",[
+      S("p1","……ええ、まあ。振込名義が変わったのは知っていましたが、とくに何も言いませんでした。"),
+      S("me","解除通知を出されたのは、その後に、マンション用地の買収の話が出てからですね？"),
+      S("opp1","異議があります。誘導です。"),
+      S("j1","反対尋問ですので、異議を棄却します。証人は答えてください。"),
+      S("p1","……時期としては、そうなります。"),
+    ],[
+      S("p1","……そんなことはありません。"),
+      N("大河内は短く否定し、反対尋問はそれ以上広がらなかった。"),
+    ]),
+    SC("prep","東京地裁 弁論準備手続室","令和8年11月12日（木）"),
+    S("j1","尋問を終えて、裁判所としては、本件解除が認められるかについてはかなり難しいと考えています。そこで和解の可能性を探りたい。"),
+    S("opp1","原告は、立退料300万円をお支払いするので、来年3月末までに退去していただく、という和解を提案します。"),
+    S("j1","被告代理人、いかがですか。"),
+    Q({id:"c1q6", kind:"和解", prompt:"裁判官の和解勧試（民訴89条）に、どう応じるか。",
+      opts:[
+        {k:"A", label:"「依頼人の意向を確認します」と引き取る。坂本さんが営業継続を望んでいることを確認したうえで、退去前提の案は断り、「会社を賃借人とする契約に切り替え、賃貸借を継続する」逆提案を出す。", g:"best", d:8, t:12, flag:"settleOk",
+         exp:"和解をするには本人からの特別の委任が必要です（民訴55条2項2号）。弁護士は依頼者の意思を尊重し（弁護士職務基本規程22条）、事件の経過を報告して協議しなければなりません（同36条）。裁判所の心証を踏まえて、依頼人の目的（営業の継続）を実現する案を逆提案するのは、交渉として筋が通っています。",
+         laws:["民訴89条","民訴55条2項2号","職務基本規程22条・36条"]},
+        {k:"B", label:"300万円なら悪くない。「その案で和解します」とその場で即答する。", g:"bad", fatal:true,
+         exp:"依頼人の意思を確認しないまま和解に応じるのは、依頼者の意思尊重義務（職務基本規程22条）に反します。訴訟委任状に和解権限が書かれていても、依頼人の目的に反する和解を独断でまとめれば、懲戒の対象にもなり得ます。",
+         laws:["職務基本規程22条","民訴55条2項2号"],
+         over:"その夜、坂本さんから電話があった。\n「店を畳む話を、俺に一言の相談もなしに決めたんですか」\n翌日、事務所に解任通知が届いた。鷹野は黙って、懲戒手続の資料を机に置いた。"},
+        {k:"C", label:"「被告はいかなる和解にも応じません」と答え、判決を求める。", g:"ok", d:2, t:2,
+         exp:"判決を求めること自体は正当な選択です。ただ、依頼人の意向を確認せずに交渉の余地をすべて閉ざすのは、依頼人にとって最善とは限りません。まず本人と協議するのが筋です。",
+         laws:["民訴89条"]}
+      ]}),
+    IF("settleOk",[
+      S("c1","先生……店を続けられるなら、それが一番です。でも、こっちが引くような話なら、判決で白黒つけてください。"),
+      S("opp1","原告として、被告の逆提案は受け入れられません。"),
+      S("j1","分かりました。和解は打ち切り、次回で弁論を終結する予定とします。"),
+    ],[
+      S("j1","分かりました。次回で弁論を終結する予定とします。"),
+    ]),
+    SC("office","鷹野法律事務所","令和8年12月上旬"),
+    S("c1","そういえば先生、思い出したんです。会社にする前に、大河内さんに立ち話で『会社にしようと思って』って言ったら、『おう、頑張れよ』って言われた気がするんです。"),
+    S("boss","……次回は結審の予定だ。どうするかね、朝倉君。"),
+    Q({id:"c1q7", kind:"手続", prompt:"結審予定の最終期日に向けて、何を準備するか。",
+      opts:[
+        {k:"A", label:"最終期日に「口頭で明示の承諾があった」という新主張を追加し、商店街の知人を証人として申請する。", g:"bad", d:-10, t:0,
+         exp:"時機に後れた攻撃防御方法は、故意または重大な過失があり、訴訟の完結を遅延させる場合、却下されます（民訴157条1項）。弁論準備手続を終えた後に新しい主張を出すと、なぜ手続中に出せなかったのか説明を求められます（民訴174条・167条）。しかも裏付けの乏しい主張は、これまでの主張全体の信用性も下げます。",
+         laws:["民訴157条1項","民訴174条","民訴167条"]},
+        {k:"B", label:"これまでの主張と証拠を最終準備書面に整理する。特段の事情を基礎づける各事実（実質的同一性、使用態様の不変、賃料の異議なき受領）を証拠に結び付けて論じる。立ち話は依頼人の記憶として扱い、新主張にはしない。", g:"best", d:10, t:3,
+         exp:"最終準備書面は、裁判官が判決を書くときの道しるべになります。要件となる事実ごとに証拠を対応させて整理するのが基本です。曖昧な記憶をもとに結審直前に主張を広げないという判断も、正しい選択です。",
+         laws:["民訴157条","民訴規則"]},
+        {k:"C", label:"特に書面は出さず、最終期日では口頭で「よろしくお願いします」とだけ述べる。", g:"meh", d:-3, t:-2,
+         exp:"違法ではありませんが、これまでの立証を判決の結論に結び付ける最後の機会を捨てることになります。",
+         laws:[]}
+      ]}),
+    SC("court","東京地裁 第709号法廷","令和9年2月4日（木）午後1時15分　判決言渡し"),
+    N("判決の言渡しは、主文を朗読して行われる（民訴252条）。当事者が欠席していても言渡しはできるが、あなたは被告席に座った。"),
+    {t:"verdict"},
+    Q({id:"c1q8", kind:"確認", prompt:"判決書の送達を受けた。この判決は、いつ確定するか。",
+      opts:[
+        {k:"A", label:"判決書の送達を受けた日から2週間以内に、双方とも控訴しなければ確定する。", g:"best", d:4, t:0,
+         exp:"控訴期間は判決書（または調書判決の調書）の送達を受けた日から2週間の不変期間です（民訴285条）。期間内に控訴がなければ判決は確定します（民訴116条1項）。",
+         laws:["民訴285条","民訴116条1項"]},
+        {k:"B", label:"言渡しの日に確定する。", g:"bad", d:-4, t:0,
+         exp:"上訴できる判決は言渡しでは確定しません。上訴期間の満了で確定します（民訴116条1項）。",
+         laws:["民訴116条1項"]},
+        {k:"C", label:"言渡しから1か月で確定する。", g:"bad", d:-4, t:0,
+         exp:"控訴期間は送達の日から2週間です（民訴285条）。上告期間も同じく2週間です（民訴313条・285条）。",
+         laws:["民訴285条"]}
+      ]}),
+  ],
+  verdict(st){
+    if(st.flags.tokudan && st.score>=this.threshold.win) return {kind:"win", label:"勝　訴",
+      main:["1　原告の請求をいずれも棄却する。","2　訴訟費用は原告の負担とする。"],
+      reason:"被告は個人で営んでいた青果店を、税務上の理由から株式会社組織にしたにすぎない。同社の株主は被告夫婦のみで、店舗の使用態様、従業員、営業内容に変化はない。原告は同社名義の賃料を異議なく受領していた。これらの事情によれば、本件転貸は賃貸人に対する背信的行為と認めるに足りない特段の事情があり、民法612条2項による解除は効力を生じない。",
+      after:[S("c1","先生……ありがとう。明日も、いつも通りシャッターを開けられます。"),S("boss","よくやった。特段の事情を事実で積み上げたのが効いたな。")]};
+    if(st.flags.tokudan && st.score>=this.threshold.mid) return {kind:"mid", label:"和解成立",
+      main:["1　原告と被告は、本件建物の賃借人を株式会社坂本青果に変更して賃貸借契約を継続することを確認する。","2　被告は原告に対し、承諾料として150万円を支払う。","3　訴訟費用は各自の負担とする。"],
+      reason:"判決言渡し前、裁判所の改めての勧告で和解が成立した（和解調書は確定判決と同一の効力を持つ。民訴267条）。店は守れたが、承諾料の負担が残った。立証や手続の詰めが甘かったぶん、交渉の材料が足りなかった。",
+      after:[S("c1","店は続けられる。……150万は痛えけどな。"),S("boss","悪くはない。だが、取れたはずの勝訴判決だったかもしれんぞ。")]};
+    return {kind:"lose", label:"敗　訴",
+      main:["1　被告は、原告に対し、別紙物件目録記載の建物を明け渡せ。","2　被告は、原告に対し、令和8年2月1日から明渡し済みまで1か月25万円の割合による金員を支払え。","3　訴訟費用は被告の負担とする。","4　この判決は、第2項に限り、仮に執行することができる。"],
+      reason: st.flags.tokudan ? "被告は特段の事情を主張するが、これを基礎づける事実の立証は十分とはいえず、背信的行為と認めるに足りない特段の事情があるとは認められない。" : "被告は、背信的行為と認めるに足りない特段の事情について何ら具体的な主張をしない。したがって、無断転貸を理由とする本件解除は有効である。",
+      after:[S("c1","……そうですか。三十年やってきた店も、これで終わりか。"),S("boss","控訴期間は2週間だ。何が足りなかったか、もう一度記録を読み直そう。")]};
+  },
+  notes:[
+    "無断転貸・無断譲渡があっても、背信的行為と認めるに足りない特段の事情があれば、612条2項の解除権は発生しない（最判昭和28年9月25日民集7巻9号979頁）。",
+    "特段の事情の主張立証責任は賃借人側にある（最判昭和41年1月27日民集20巻1号136頁）。",
+    "個人営業を実質そのまま法人化した場合は、特段の事情が認められやすい（最判昭和39年11月19日）。",
+    "答弁書の陳述擬制（民訴158条）と擬制自白（民訴159条）。第1回期日の欠席が致命傷になるかどうかは、答弁書の有無で決まる。"
+  ]
+};
+
+/* =====================================================================
+   第2章　登記を信じた買主（最判平成18年2月23日ほか）
+   ===================================================================== */
+const CH2 = {
+  id:"ch2", no:"二", title:"登記簿の向こう側", court:"横浜地方裁判所 第6民事部（合議）",
+  caseName:"令和8年(ワ)第1544号 所有権移転登記手続請求事件",
+  basis:"最判平成18年2月23日（94条2項・110条の類推適用）／最判昭和45年9月22日（不実登記の承認）／自白の撤回の制限",
+  role:"被告（買主）代理人", panel:true,
+  threshold:{win:115, mid:90}, keyFlag:"zenimuka",
+  nodes:[
+    SC("office","鷹野法律事務所","令和8年6月15日（月）"),
+    S("c2","会社員の藤堂です。3年前、横浜市青葉区の土地と建物を3,800万円で買いました。登記簿で売主の真壁さんの名義を確認して、代金も全額払って、移転登記も済ませています。"),
+    S("c2","それが今になって、白石さんという70代の女性から『その家は私のものだ、登記を戻せ』と訴えられたんです。"),
+    S("boss","訴状によると、白石さんは真壁に賃貸管理を任せていた。真壁に言われるまま登記済証を預け、中身を確かめずに書類へ署名押印し、真壁が目の前で実印を登記申請書に押すのを黙って見ていた。真壁はそれを使って自分名義に移転登記をし、藤堂さんに売った、と。"),
+    S("me","真壁さんは今どこに？"),
+    S("boss","不動産業はとうに廃業していて、破産寸前らしい。連絡はつくが、協力する気はなさそうだ。"),
+    DOC("訴　　状（抄）","令和8年(ワ)第1544号　所有権移転登記手続請求事件",`
+      <p>原告　白石 和枝　　原告訴訟代理人弁護士　入江 千尋</p><p>被告　藤堂 聡</p>
+      <p class="sec">請求の趣旨</p>
+      <p>1　被告は、原告に対し、別紙物件目録記載の土地及び建物について、真正な登記名義の回復を原因とする所有権移転登記手続をせよ。</p>
+      <p>2　訴訟費用は被告の負担とする。</p>
+      <p class="sec">請求の原因（要旨）</p>
+      <p>原告は本件不動産を所有している。訴外真壁光男は、原告に無断で自己名義への所有権移転登記をし、これを被告に売却した。真壁は無権利者であり、被告は所有権を取得しない。</p>`),
+    S("boss","合議事件になる。裁判長は北条判事だ。理屈には厳しいが、筋の通った主張はきちんと聞く人だよ。……まず、真壁をどうするかだ。"),
+    Q({id:"c2q1", kind:"手続", prompt:"訴訟の外にいる真壁に対して、いま打てる手続上の手当ては何か。",
+      opts:[
+        {k:"A", label:"真壁に訴訟告知をする。負けた場合、藤堂さんは真壁に損害賠償を請求することになるが、そのとき真壁が「自分は無権利ではなかった」などと蒸し返せないようにしておく。", g:"best", d:10, t:6, flag:"notice",
+         exp:"訴訟告知（民訴53条）を受けた者は、参加しなかった場合でも、参加できた時に参加したものとみなされ（同条4項）、参加的効力（民訴46条）を受けます。敗訴して真壁に責任追及（他人物売買の債務不履行など、民法561条・415条）をするとき、前訴の判断の基礎を真壁に争わせないための手当てです。",
+         laws:["民訴53条","民訴46条","民法561条"]},
+        {k:"B", label:"本訴の中で、真壁を相手に反訴を提起する。", g:"bad", d:-10, t:0,
+         exp:"反訴は、被告が本訴の原告に対して提起するものです（民訴146条）。訴訟の外にいる第三者を相手に反訴はできません。真壁に請求したければ、別訴を起こすか、訴訟告知で布石を打つことになります。",
+         laws:["民訴146条"]},
+        {k:"C", label:"特に何もしない。本件で勝てば済む話だ。", g:"meh", d:-2, t:-2,
+         exp:"勝てれば問題ありませんが、敗訴に備えた手当てを欠いています。依頼人は3,800万円を失いかねないので、回収の道筋を確保しておくのが代理人の仕事です。",
+         laws:["民訴53条"]}
+      ]}),
+    S("boss","次に、本丸だ。藤堂さんを守る法律構成をどう立てる？"),
+    Q({id:"c2q2", kind:"主張", prompt:"無権利者・真壁から買った藤堂さんを保護する法律構成として、何を主張するか。",
+      opts:[
+        {k:"A", label:"即時取得（民法192条）。藤堂さんは平穏・公然・善意無過失で取得した。", g:"bad", d:-12, t:0,
+         exp:"即時取得は動産取引の保護の制度で、不動産には適用されません。",
+         laws:["民法192条"]},
+        {k:"B", label:"登記を信頼した者は保護されるべきだ。登記には公信力がある。", g:"bad", d:-12, t:0,
+         exp:"日本の不動産登記には公信力がありません。登記を信じて無権利者から買っても、それだけでは所有権を取得できません。その穴を埋めるために判例が発展させたのが、94条2項の類推適用です。",
+         laws:["登記の公信力"]},
+        {k:"C", label:"民法94条2項（及び110条）の類推適用。真の所有者が虚偽の外観（不実登記）の作出に関与しており、その外観を信じた第三者は保護される。", g:"best", d:14, t:3, flag:"theory",
+         exp:"判例は、不実の登記の作出について真の所有者に帰責性があるとき、94条2項を類推して善意の第三者を保護してきました（最判昭和45年9月22日：不実登記を知りながら承認していた事案）。",
+         laws:["民法94条2項","民法110条","最判昭和45年9月22日"]},
+        {k:"D", label:"177条。白石さんは登記を備えていないから、所有権を藤堂さんに対抗できない。", g:"bad", d:-10, t:0,
+         exp:"177条は、同じ不動産について両立しない物権を取得した者同士の優劣を、登記で決める規定です。無権利者・真壁から買った藤堂さんは、白石さんとの関係で「第三者」として登記の欠缺を主張できる立場ではありません（無権利者からの譲受人は177条の第三者に当たらない）。",
+         laws:["民法177条"]}
+      ]}),
+    S("boss","94条2項の類推で行く。問題は、白石さんがどの程度関わっていたかだ。白石さんは、真壁が自分名義の登記をしたこと自体は知らなかった。"),
+    S("me","知りながら放置した、承認していた、という事案ではない……。"),
+    Q({id:"c2q3", kind:"要件", prompt:"白石さんは不実登記を「知らなかった」。この事案で、藤堂さんの主観について何を主張・立証すべきか。",
+      opts:[
+        {k:"A", label:"善意だけで足りる。94条2項の第三者に無過失は要求されない。", g:"meh", d:-6, t:0,
+         exp:"94条2項を直接適用する場合や、真の所有者が自ら外観を作出・承認した場合の類推では、判例上、善意で足ります。しかし本件のように、真の所有者が登記を知らず、外観の作出に積極的に関与したとまでは言えない場合、判例は110条も併せて類推し、第三者に善意無過失を求めています（最判平成18年2月23日）。善意だけでは足りません。",
+         laws:["民法94条2項","最判平成18年2月23日"]},
+        {k:"B", label:"善意無過失を主張し立証する。白石さんの帰責性が「外観作出への積極的関与や、知りながら放置したのと同視し得るほど重い」ことと併せて、94条2項・110条の類推適用を主張する。", g:"best", d:14, t:3, flag:"zenimuka",
+         exp:"最判平成18年2月23日は、所有者が登記済証を理由も確認せず交付し、内容を確認せずに書類へ署名押印し、目の前で実印を押されるのを漫然と見ていた事案です。その帰責性は「自ら外観の作出に積極的に関与した場合や、これを知りながらあえて放置した場合と同視し得るほど重い」として、94条2項・110条を類推し、善意無過失の第三者を保護しました。",
+         laws:["民法94条2項","民法110条","最判平成18年2月23日"]},
+        {k:"C", label:"藤堂さんの主観は、原告側が「悪意だった」と立証すべきことだ。こちらからは主張しない。", g:"bad", d:-12, t:0,
+         exp:"94条2項（類推）による保護を求めるのは被告で、善意（本件では善意無過失）は被告が主張立証すべき事実と解されています。主張しなければ、弁論主義によって判決の基礎にできません。",
+         laws:["弁論主義","証明責任"]}
+      ]}),
+    S("boss","そうだ。だから、白石さんの帰責性をどう描くかが勝負になる。"),
+    Q({id:"c2q4", kind:"主張", prompt:"白石さんの帰責性として、準備書面で強調すべき事実はどれか。",
+      opts:[
+        {k:"A", label:"使い道を確認しないまま登記済証を真壁に交付したこと。内容を確認せずに売買契約書へ署名押印したこと。真壁が目の前で実印を登記申請書に押すのを、黙って見ていたこと。", g:"best", d:12, t:2, flag:"fault",
+         exp:"平成18年判決が重く見たのは、まさにこうした「不注意の積み重ね」でした。帰責性を抽象的に「落ち度がある」と書くのではなく、外観の作出に結び付く具体的な行為を時系列で並べることが大切です。",
+         laws:["最判平成18年2月23日"]},
+        {k:"B", label:"白石さんは高齢で、判断能力が衰えていたこと。", g:"bad", d:-10, t:0,
+         exp:"判断能力の低下を強調すると、帰責性を否定する方向に働きます（意思能力の欠如が問題になれば、そもそも帰責性を問えません）。自分の主張を自分で崩す一手です。",
+         laws:["民法3条の2"]},
+        {k:"C", label:"そもそも真壁のような業者を選んだこと自体が落ち度だ。", g:"meh", d:-3, t:0,
+         exp:"選んだこと（選任）だけでは、不実登記の作出に関与したとは言えません。判例が問題にするのは、外観の作出・存続に結び付く具体的な関与です。",
+         laws:["民法94条2項類推"]}
+      ]}),
+    SC("court","横浜地裁 第502号法廷","令和8年9月10日（木）第2回口頭弁論"),
+    N("合議の法廷。法壇には裁判長を中央に、右陪席と左陪席の3人が並んでいる。"),
+    S("opp2","原告は、前回の準備書面で『原告が真壁に登記済証を交付した』と認めた部分を撤回します。真実は、登記済証は真壁に持ち出されたものです。"),
+    S("j2","被告代理人、自白の撤回について意見は。"),
+    Q({id:"c2q5", kind:"手続", prompt:"原告が、登記済証を交付したという「自白」を撤回しようとしている。どう応じるか。",
+      opts:[
+        {k:"A", label:"「撤回には異議があります。同意しません」と述べる。自白の撤回が許されるのは、相手方の同意がある場合、刑事上罰すべき他人の行為によって自白した場合、自白が真実に反しかつ錯誤による場合に限られる。", g:"best", d:12, t:2, flag:"noRetract",
+         exp:"裁判上の自白は裁判所も当事者も拘束し（民訴179条）、自由には撤回できません。判例上、撤回が許されるのは①相手方の同意、②刑事上罰すべき他人の行為による場合（民訴338条1項5号の趣旨）、③反真実かつ錯誤に基づく場合（大判大正4年9月29日。反真実が証明されれば錯誤は推認される：最判昭和25年7月11日）です。同意しないことをはっきり述べるのが第一歩です。",
+         laws:["民訴179条","大判大正4年9月29日","最判昭和25年7月11日"]},
+        {k:"B", label:"「被告としては特に異議はありません」と同意する。", g:"bad", d:-14, t:-3,
+         exp:"相手方が同意すれば撤回は許されます。帰責性の中核となる事実（自分で登記済証を交付したこと）を、自分の手で争点に戻してしまいました。",
+         laws:["民訴179条"]},
+        {k:"C", label:"何も言わず、裁判所の判断に任せる。", g:"meh", d:-4, t:0,
+         exp:"黙っていると、撤回に同意したと受け取られるおそれがあります。自白の拘束力を守るには、明確に異議を述べるべきです。",
+         laws:["民訴179条"]}
+      ]}),
+    IF("noRetract",[
+      S("j2","被告は撤回に同意しないとのことです。原告が反真実と錯誤を主張されるなら、立証してください。……原告代理人、その立証はありますか。"),
+      S("opp2","……次回までに検討いたします。"),
+      N("結局、原告は撤回を断念し、登記済証の交付は争いのない事実のまま残った。"),
+    ],[
+      N("登記済証が「持ち出された」のかどうかが新たな争点になり、審理は長引いた。"),
+    ]),
+    SC("court","横浜地裁 第502号法廷","令和8年12月3日（木）当事者尋問"),
+    N("原告本人・白石和枝の尋問。入江弁護士の主尋問で、白石は「真壁さんを信じていた」と繰り返した。"),
+    S("j2","被告代理人、反対尋問をどうぞ。"),
+    Q({id:"c2q6", kind:"尋問", prompt:"原告本人・白石への反対尋問。どの質問をするか。",
+      opts:[
+        {k:"A", label:"「真壁さんに登記済証を渡すとき、何に使うのか確認しましたか？」「書類に署名したとき、内容を読みましたか？」「真壁さんが実印を押すのを、そばで見ていましたね？」", g:"best", d:12, t:2,
+         exp:"帰責性を基礎づける事実を、一問一答で本人に認めさせる質問です。どれも「はい／いいえ」で答えられ、どう答えても被告の主張に沿います。",
+         laws:["民訴規則114条","民訴規則115条2項"]},
+        {k:"B", label:"「あなたは真壁さんとグルだったんじゃありませんか？」", g:"bad", d:-10, t:-2,
+         exp:"根拠のない侮辱的な質問で、民訴規則115条2項1号（証人を侮辱し、又は困惑させる質問）に当たり制限されます。合議体の心証も大きく悪化します。",
+         laws:["民訴規則115条2項1号"]},
+        {k:"C", label:"「真壁さんは悪い人だと思いますか？」", g:"meh", d:-4, t:0,
+         exp:"証人の意見を求める質問は、原則として禁止されています（民訴規則115条2項5号）。答えを聞いても、争点の事実は一つも明らかになりません。",
+         laws:["民訴規則115条2項5号"]}
+      ]}),
+    S("p2","……真壁さんが『手続に必要だから』と言うので、渡しました。何の手続かは……聞きませんでした。印鑑も、真壁さんが押すのを横で見ていました。"),
+    SC("office","鷹野法律事務所","令和9年1月中旬"),
+    S("boss","帰責性は固まった。残るは藤堂さんの善意無過失だ。何で固める？"),
+    Q({id:"c2q7", kind:"立証", prompt:"藤堂さんの「善意無過失」を立証するため、どの証拠を出すか。",
+      opts:[
+        {k:"A", label:"購入前に取得した登記事項証明書、宅建業者による重要事項説明書、現地確認の記録と写真、相場どおりの価格（3,800万円）での売買であることを示す査定書。仲介した宅建業者の証人尋問も申請する。", g:"best", d:12, t:3, flag:"proof",
+         exp:"無過失の判断では、取引で通常要求される調査をしたかが問われます。登記の確認、現地の確認、価格の相当性（不自然な廉価でないこと）、専門業者の関与などを、客観的な書証と第三者の証言で示すのが王道です。",
+         laws:["民法110条類推","民訴219条"]},
+        {k:"B", label:"藤堂さん本人の陳述書（「真壁さんを信じていました」）だけ。", g:"meh", d:-4, t:0,
+         exp:"陳述書も証拠にはなりますが、利害関係の深い本人の言い分だけでは、無過失（調査を尽くしたこと）の立証として弱いです。",
+         laws:["証明力"]},
+        {k:"C", label:"証拠は出さない。善意無過失は推定される。", g:"bad", d:-12, t:0,
+         exp:"善意無過失を推定する規定は、この場面にはありません（占有者の善意を推定する民法186条1項は、占有について定めたものです）。本件で保護を求める被告が立証すべき事実です。",
+         laws:["民法186条1項"]}
+      ]}),
+    SC("court","横浜地裁 第502号法廷","令和9年3月4日（木）第6回口頭弁論（結審予定）"),
+    S("opp2","原告は、新たに主張を追加します。そもそも真壁が提出した登記申請書の署名は原告の筆跡ではなく、偽造です。筆跡鑑定を申し出ます。"),
+    S("j2","……被告代理人のご意見は。"),
+    Q({id:"c2q8", kind:"手続", prompt:"結審予定の期日に、原告が新しい主張と鑑定の申出をしてきた。どう対応するか。",
+      opts:[
+        {k:"A", label:"「時機に後れた攻撃防御方法として、却下を求めます（民訴157条1項）」と申し立てる。登記申請書は訴訟の初期から書証として提出されており、原告は争点整理の段階で主張できたはずだ、と理由も述べる。", g:"best", d:10, t:2, flag:"late",
+         exp:"時機に後れた攻撃防御方法は、①時機に後れたこと、②故意または重大な過失、③訴訟の完結を遅延させること、の3つを満たせば却下されます（民訴157条1項）。却下は申立てでも職権でもできます。要件に沿って理由を示すと、裁判所も判断しやすくなります。",
+         laws:["民訴157条1項"]},
+        {k:"B", label:"「被告としても反論の準備をしたいので、続行してください」と求める。", g:"meh", d:-5, t:-2,
+         exp:"審理を引き延ばすと、結審直前の新主張を事実上受け入れることになります。依頼人の負担も増えます。",
+         laws:["民訴157条1項"]},
+        {k:"C", label:"「そもそも偽造なら、白石さんの帰責性はますます重いことになります」と、その場で実体の反論だけをする。", g:"meh", d:-3, t:0,
+         exp:"中身で反論する前に、手続上の防御（157条による却下申立て）が先です。しかも、偽造であれば白石さん自身の関与が薄まる方向にも働くので、この反論は筋がよくありません。",
+         laws:["民訴157条1項"]}
+      ]}),
+    IF("late",[
+      S("j2","（陪席と短く合議して）原告の新たな主張と鑑定の申出は、時機に後れたものとして却下します。本件の弁論を終結します。判決言渡しは4月22日午後1時10分とします。"),
+    ],[
+      S("j2","……では、次回期日を指定します。"),
+      N("審理はさらに2期日続き、結局、筆跡鑑定でも決め手は得られなかった。"),
+    ]),
+    SC("court","横浜地裁 第502号法廷","令和9年4月22日（木）午後1時10分　判決言渡し"),
+    {t:"verdict"},
+    Q({id:"c2q9", kind:"確認", prompt:"判決を受けた相手方が控訴するとして、控訴審では新しい主張ができるか。",
+      opts:[
+        {k:"A", label:"控訴審は「続審」なので、新たな主張や証拠も出せる。ただし時機に後れたものは却下され得るし、裁判長が提出期間を定めることもある。", g:"best", d:4, t:0,
+         exp:"日本の控訴審は続審制で、第一審の資料を引き継ぎつつ新たな攻撃防御方法も提出できます（民訴296条・297条）。ただし157条は控訴審でも準用され、裁判長が期間を定めた場合の扱いは民訴301条に定めがあります。",
+         laws:["民訴296条","民訴297条","民訴301条"]},
+        {k:"B", label:"控訴審は事後審なので、第一審に出ていない主張は一切できない。", g:"bad", d:-4, t:0,
+         exp:"事後審的な性格を持つのは上告審です。控訴審は続審です。",
+         laws:["民訴296条"]},
+        {k:"C", label:"控訴審では、事件を最初から審理し直すので、第一審の証拠調べの結果は使えない。", g:"bad", d:-4, t:0,
+         exp:"それは「覆審」の考え方です。日本の控訴審は続審で、第一審の訴訟資料は控訴審でも効力を持ちます（民訴298条1項）。",
+         laws:["民訴298条1項"]}
+      ]}),
+  ],
+  verdict(st){
+    const ok = st.flags.zenimuka && st.flags.theory;
+    if(ok && st.score>=this.threshold.win) return {kind:"win", label:"勝　訴",
+      main:["1　原告の請求を棄却する。","2　訴訟費用は原告の負担とする。"],
+      reason:"原告は、訴外真壁に対し、使途を確認しないまま登記済証を交付し、内容を確認しないで売買契約書に署名押印し、真壁が原告の実印を登記申請書に押捺するのを漫然と見ていた。原告の帰責性は、自ら外観の作出に積極的に関与した場合やこれを知りながらあえて放置した場合と同視し得るほど重い。そして被告は、真壁が所有者であると信じ、そう信じたことに過失はない。よって民法94条2項、110条の類推適用により、原告は、真壁が本件不動産の所有権を取得していないことを被告に対抗できない。",
+      after:[S("c2","……家を、守れたんですね。"),S("boss","訴訟告知まで含めて、満点に近い仕事だ。")]};
+    if(ok && st.score>=this.threshold.mid) return {kind:"mid", label:"和解成立",
+      main:["1　原告は、被告が本件不動産の所有者であることを確認する。","2　被告は、原告に対し、解決金として600万円を支払う。","3　訴訟費用は各自の負担とする。"],
+      reason:"法律構成は正しかったものの、帰責性や無過失の立証、あるいは手続対応の詰めに甘さが残った。裁判所の強い勧めで、被告が解決金を払う和解となった。"+(st.flags.notice?"訴訟告知をしていたので、藤堂さんは真壁への求償を見込める。":""),
+      after:[S("c2","家は残った。でも600万……。"),S("boss","筋はよかった。勝ち切るには、要件ごとの詰めが要る。")]};
+    return {kind:"lose", label:"敗　訴",
+      main:["1　被告は、原告に対し、別紙物件目録記載の土地及び建物について、真正な登記名義の回復を原因とする所有権移転登記手続をせよ。","2　訴訟費用は被告の負担とする。"],
+      reason: !st.flags.theory ? "被告の主張する法律構成はいずれも採用できない。我が国の不動産登記に公信力はなく、無権利者から譲り受けた被告は所有権を取得しない。" : "被告は94条2項の類推適用を主張する。しかし本件では原告が不実登記を知っていたとは認められず、被告の善意無過失についても十分な主張立証がない。",
+      after:[S("c2","そんな……3,800万円、払ったのに。"), st.flags.notice ? S("boss","訴訟告知をしておいたのは救いだ。真壁への損害賠償請求で、彼はこの判決の判断を争えない。") : S("boss","真壁への請求は別に起こすしかない。訴訟告知をしていれば、もっと楽だったんだがな。")]};
+  },
+  notes:[
+    "不実登記を知りながら承認していた所有者には94条2項が類推適用される（最判昭和45年9月22日民集24巻10号1424頁）。",
+    "所有者が外観作出に積極的に関与した場合等と同視し得るほど帰責性が重いときは、94条2項・110条の類推適用により、善意無過失の第三者が保護される（最判平成18年2月23日民集60巻2号546頁）。",
+    "自白の撤回は、相手方の同意、刑事上罰すべき他人の行為による自白、反真実かつ錯誤の場合に限られる。",
+    "訴訟告知（民訴53条）は、敗訴に備えて第三者に参加的効力を及ぼすための手当てになる。"
+  ]
+};
+
+/* =====================================================================
+   第3章　二重譲渡と背信的悪意者（最判昭和43年8月2日ほか）
+   ===================================================================== */
+const CH3 = {
+  id:"ch3", no:"三", title:"先に登記した男", court:"さいたま地方裁判所 第4民事部",
+  caseName:"令和8年(ワ)第702号 所有権移転登記手続請求事件",
+  basis:"最判昭和43年8月2日（背信的悪意者）／最判平成8年10月29日（転得者の相対的判断）／民事保全法による処分禁止の仮処分",
+  role:"原告（第一買主）代理人",
+  threshold:{win:100, mid:75, winAlt:82, midAlt:65}, keyFlag:"haishin",
+  nodes:[
+    SC("office","鷹野法律事務所","令和8年3月9日（月）午前9時"),
+    N("この事件では、あなたは原告側の代理人だ。依頼人を守るため、先に動かなければならない。"),
+    S("c3","森川です。さいたま市緑区の土地を、田所さんというおじいさんから2,000万円で買いました。家を建てるつもりで、代金は去年10月に全額払っています。"),
+    S("c3","田所さんに『相続の書類がそろうまで、登記は少し待ってくれ』と言われて待っていたら……先月、別の人の名義に登記されていたんです。"),
+    S("boss","登記したのは有馬健吾。地元の不動産ブローカーだ。森川さんが買ったことを知ったうえで、借金に困っていた田所さんに近づき、300万円で買い取って先に登記した。そして森川さんに、こんな手紙を送ってきた。"),
+    DOC("通　知　書","令和8年2月20日",`
+      <p>森川早苗 様</p>
+      <p>さいたま市緑区所在の土地（地番 略）は、当職が正式に買い受け、所有権移転登記を完了しております。</p>
+      <p>つきましては、貴殿が本件土地の取得を希望される場合、金3,500万円にてお譲りいたします。</p>
+      <p>3月末日までにご回答なき場合は、第三者への売却を進めます。</p>
+      <p style="text-align:right">有馬 健吾 <span class="stamp">有馬</span></p>`),
+    S("me","「第三者への売却を進めます」……3月末まで、あと3週間です。"),
+    Q({id:"c3q1", kind:"保全", prompt:"有馬が土地を第三者に転売するおそれがある。まず何をするか。",
+      opts:[
+        {k:"A", label:"本案訴訟の前に、さいたま地裁に処分禁止の仮処分を申し立て、仮処分の登記をしておく。", g:"best", d:12, t:8, flag:"karishobun",
+         exp:"係争物に関する仮処分（民事保全法23条1項）のうち処分禁止の仮処分は、登記によって執行します（同法53条）。その登記の後にされた登記に係る権利の取得や処分は、仮処分債権者に対抗できません（同法58条1項）。被告が途中で土地を売っても、訴訟の相手方を有馬に固定しておけます（当事者恒定効）。",
+         laws:["民保法23条1項","民保法53条","民保法58条1項"]},
+        {k:"B", label:"すぐに本案訴訟を提起する。勝てば登記は取り戻せる。", g:"meh", d:-6, t:-2,
+         exp:"訴訟中に有馬が第三者へ転売して登記を移せば、勝訴判決を得ても転得者には効力が及ばない（既判力は口頭弁論終結前の承継人には及ばない。民訴115条1項3号参照）ため、転得者を相手に争い直すことになります。保全を先行させるのが定石です。",
+         laws:["民訴115条1項3号","民保法23条"]},
+        {k:"C", label:"有馬に内容証明郵便で「売却しないよう」警告する。", g:"meh", d:-6, t:0,
+         exp:"警告に法的な拘束力はありません。かえって、有馬に急いで転売するきっかけを与えかねません。",
+         laws:[]}
+      ]}),
+    IF("karishobun",[
+      S("boss","申立書を書くぞ。裁判所に何を示せば、仮処分命令が出る？"),
+      Q({id:"c3q2", kind:"保全", prompt:"処分禁止の仮処分を得るために、裁判所に何を示す必要があるか。",
+        opts:[
+          {k:"A", label:"被保全権利（売買による所有権移転登記請求権）と保全の必要性を疎明する。裁判所の決定に従い担保を立てる。", g:"best", d:10, t:2,
+           exp:"保全命令の申立てでは、保全すべき権利と保全の必要性を明らかにし、疎明しなければなりません（民保法13条）。疎明は、証明よりも低い「一応確からしい」程度の心証で足ります。保全命令は担保を立てさせて発令するのが通常です（同法14条）。",
+           laws:["民保法13条","民保法14条"]},
+          {k:"B", label:"本案訴訟と同じく、被保全権利を完全に「証明」しなければならない。", g:"bad", d:-6, t:0,
+           exp:"保全は迅速さが求められるので、証明ではなく疎明で足ります（民保法13条2項）。",
+           laws:["民保法13条2項"]},
+          {k:"C", label:"申立書を出すだけでよい。担保は不要だ。", g:"bad", d:-6, t:0,
+           exp:"仮処分が不当だった場合に債務者が受ける損害を担保するため、通常は担保を立てることが発令の条件になります（民保法14条1項）。",
+           laws:["民保法14条1項"]}
+        ]}),
+      N("3月13日、さいたま地裁は担保300万円の供託を条件に、処分禁止の仮処分命令を発令した。裁判所書記官の嘱託で、本件土地の登記簿に仮処分の登記が入った。"),
+    ],[
+      N("あなたは保全を飛ばして、訴状の作成に取りかかった。"),
+    ]),
+    SC("office","鷹野法律事務所","令和8年3月下旬"),
+    S("me","本案の訴状です。森川さんは東京都世田谷区在住、有馬は埼玉県川口市在住、土地はさいたま市緑区。土地の価額は約2,000万円です。"),
+    Q({id:"c3q3", kind:"管轄", prompt:"本案訴訟（有馬に対する所有権移転登記手続請求）を、どの裁判所に提起するか。",
+      opts:[
+        {k:"A", label:"さいたま地方裁判所。不動産に関する訴えとして不動産の所在地を管轄し（民訴5条12号）、有馬の住所地（川口市）を管轄する裁判所でもある（民訴4条）。", g:"best", d:8, t:0,
+         exp:"訴額140万円を超える請求なので、事物管轄は地方裁判所です（裁判所法24条1号・33条1項1号）。土地管轄は、被告の普通裁判籍（民訴4条）のほか、不動産に関する訴えとして不動産所在地にも認められます（民訴5条12号）。",
+         laws:["民訴4条","民訴5条12号","裁判所法24条1号"]},
+        {k:"B", label:"東京地方裁判所。原告の住所地で訴えれば、依頼人の負担が少ない。", g:"meh", d:-5, t:0,
+         exp:"登記手続を求める訴えでは、原告住所地に当然に管轄は生じません。金銭債務なら持参債務の原則（民法484条1項）により義務履行地として原告住所地に管轄が生じますが（民訴5条1号）、本件はこれに当たりません。管轄違いで移送されるおそれがあります（民訴16条1項）。",
+         laws:["民訴5条1号","民訴16条1項"]},
+        {k:"C", label:"東京簡易裁判所。早く終わる。", g:"bad", d:-8, t:0,
+         exp:"簡易裁判所の事物管轄は、訴額140万円以下の請求です（裁判所法33条1項1号）。2,000万円の土地の登記請求は管轄外です。",
+         laws:["裁判所法33条1項1号"]}
+      ]}),
+    SC("court","さいたま地裁 第105号法廷","令和8年6月4日（木）第1回口頭弁論"),
+    S("opp3","被告は、原告の請求原因（田所から原告への売買）は認めます。そのうえで抗弁として主張します。被告は田所から本件土地を買い受け、所有権移転登記を備えた。原告は登記を有しないから、所有権の取得を被告に対抗できません。民法177条です。"),
+    S("j3","原告代理人、再抗弁はありますか。"),
+    Q({id:"c3q4", kind:"主張", prompt:"有馬の「対抗要件の抗弁」（177条）に対し、どんな再抗弁を出すか。",
+      opts:[
+        {k:"A", label:"「有馬は、森川さんが先に買っていたことを知っていた（悪意）。だから177条の第三者に当たらない」", g:"bad", d:-10, t:0,
+         exp:"判例は、単に先行する譲渡を知っているだけの悪意者も、177条の「第三者」に含めています（自由競争の範囲内とされる）。悪意だけでは再抗弁として足りません。",
+         laws:["民法177条"]},
+        {k:"B", label:"「有馬は背信的悪意者であり、登記の欠缺を主張する正当な利益を有しない」。悪意に加えて、高値で売りつける目的、田所さんの窮状につけ込んだ廉価での買い受け、などの信義則に反する事情を具体的に主張する。", g:"best", d:14, t:3, flag:"haishin",
+         exp:"判例は、実体上物権変動があった事実を知る者が、その物権変動について登記の欠缺を主張することが信義に反すると認められる事情がある場合、その者は背信的悪意者として177条の第三者に当たらないとしました（最判昭和43年8月2日）。同判決は、第一買主に高値で売りつけて不当な利益を得る目的で買い受けた事案です。",
+         laws:["民法177条","民法1条2項","最判昭和43年8月2日"]},
+        {k:"C", label:"「177条は登記の先後で決まる規定だから、争いようがない」として、損害賠償請求に切り替える。", g:"bad", d:-14, t:-8,
+         exp:"背信的悪意者排除論という確立した判例法理を見落としています。依頼人の「家を建てたい」という目的を、検討もせずに放棄することにもなります。",
+         laws:["最判昭和43年8月2日"]}
+      ]}),
+    S("j3","原告は、背信性を基礎づける具体的事実を立証してください。"),
+    SC("office","鷹野法律事務所","令和8年7月"),
+    S("boss","有馬の背信性をどう証明する？　田所さんが『有馬に何と言われて売ったか』を話してくれれば強いんだが。"),
+    Q({id:"c3q5", kind:"立証", prompt:"背信性を立証するために、どう証拠を集めるか。",
+      opts:[
+        {k:"A", label:"有馬の通知書（3,500万円での買取り要求）を書証として出す。田所さんに事情を聴き、証人として申請して、有馬から勧誘されたときの言葉（「森川に高く売りつける」）を証言してもらう。", g:"best", d:12, t:2, flag:"witness",
+         exp:"有馬自身が作った通知書は、高値で売りつける目的を直接示す強力な書証です。田所さんの証言は、売買に至った経緯や有馬の目的を明らかにします。証人尋問の申出は、証明すべき事実を特定して行います（民訴180条、民訴規則106条）。",
+         laws:["民訴180条","民訴190条","民訴規則106条"]},
+        {k:"B", label:"有馬の事務所に興信所の調査員を無断で立ち入らせ、パソコンのメールを確認させる。", g:"bad", fatal:true,
+         exp:"住居侵入や不正アクセスを伴う証拠収集は犯罪になり得ます。弁護士がそれを指示すれば、職務基本規程（違法行為の助長の禁止・14条）違反として懲戒の対象です。著しく反社会的な手段で集めた証拠は、証拠能力が否定されることもあります。",
+         laws:["職務基本規程14条","刑法130条"],
+         over:"調査員は有馬の事務所に忍び込んだところを通報され、現行犯逮捕された。\n調査員の供述から、指示したのがあなたであることが明らかになった。\n弁護士会の綱紀委員会から、呼出状が届いた。"},
+        {k:"C", label:"弁護士会照会で、有馬の銀行口座の入出金履歴を取り寄せる。", g:"meh", d:-2, t:0,
+         exp:"弁護士会照会（弁護士法23条の2）は有用な制度ですが、金融機関は第三者の口座情報について回答を拒むことが多いです。背信性の中心的な証拠にもなりにくいでしょう。",
+         laws:["弁護士法23条の2"]}
+      ]}),
+    SC("court","さいたま地裁 第105号法廷","令和8年10月1日（木）第4回口頭弁論"),
+    S("opp3","ご報告します。有馬は本年4月、本件土地を株式会社エーエム・エステートに売却し、所有権移転登記を了しております。被告は、もはや登記名義人ではありません。原告の請求は認められません。"),
+    S("c3","（小声で）先生、エーエム・エステートって……代表者、有馬の奥さんですよ。"),
+    IF("karishobun",[
+      Q({id:"c3q6a", kind:"保全", prompt:"有馬は、仮処分の登記の後に土地を転売していた。どう反論するか。",
+        opts:[
+          {k:"A", label:"「エーエム・エステートへの移転登記は、処分禁止の仮処分の登記より後にされたもので、仮処分債権者である原告に対抗できません（民事保全法58条1項）。原告は有馬に対する勝訴判決で、仮処分後の登記を抹消できます（同条2項）」と主張し、請求の趣旨は維持する。", g:"best", d:12, t:6, flag:"fixed",
+           exp:"これが処分禁止の仮処分の当事者恒定効です。仮処分の登記後に第三者が登記を得ても、仮処分債権者はそれを無視して有馬を相手に勝訴判決を得られます。その判決に基づく登記の際、仮処分後の第三者の登記は抹消できます（民保法58条2項、不動産登記法111条）。",
+           laws:["民保法58条1項・2項","不登法111条"]},
+          {k:"B", label:"エーエム・エステートを被告に加えるため、訴えを取り下げて出直す。", g:"bad", d:-10, t:-4,
+           exp:"せっかくの仮処分の効力（当事者恒定効）を、自分で捨ててしまう一手です。",
+           laws:["民保法58条"]}
+        ]}),
+    ],[
+      Q({id:"c3q6b", kind:"主張", prompt:"仮処分をしていなかったため、土地は既に転得者の名義になった。どう対応するか。",
+        opts:[
+          {k:"A", label:"エーエム・エステートも被告に加える（訴えの追加的変更ではなく、別訴を提起して弁論の併合を求める）。転得者自身も背信的悪意者であると主張・立証する（代表者が有馬の妻で、事情をすべて知っていたこと）。", g:"ok", d:4, t:2, flag:"tenToku",
+           exp:"背信的悪意者からの転得者は、転得者自身が背信的悪意者と評価されない限り、177条の第三者として保護されます（最判平成8年10月29日、相対的構成）。転得者について改めて背信性を立証する必要があり、仮処分をしていれば避けられた負担です。",
+           laws:["最判平成8年10月29日","民訴152条（弁論の併合）"]},
+          {k:"B", label:"有馬への請求をそのまま続ける。有馬が背信的悪意者なら、その後の取得者も当然に無権利だ。", g:"bad", d:-10, t:-2,
+           exp:"判例は、背信的悪意者からの転得者についても、その者自身が背信的悪意者かどうかを個別に判断します（最判平成8年10月29日）。有馬が背信的悪意者でも、転得者が当然に無権利になるわけではありません。登記名義のない有馬に勝っても、目的は達成できません。",
+           laws:["最判平成8年10月29日"]}
+        ]}),
+    ]),
+    SC("court","さいたま地裁 第105号法廷","令和9年1月14日（木）証人・当事者尋問"),
+    N("証人・田所義男は、有馬に「森川には高く売りつけるから、あんたは300万で手を打て」と言われた、と証言した。続いて被告本人・有馬健吾が証言台に立った。"),
+    S("j3","原告代理人、反対尋問をどうぞ。"),
+    Q({id:"c3q7", kind:"尋問", prompt:"被告本人・有馬への反対尋問。",
+      opts:[
+        {k:"A", label:"「あなたは本件土地を300万円で買い、その1週間後に、原告に3,500万円での買取りを求める通知書を送りましたね？」（甲第5号証を示して）「この署名と印影は、あなたのものですね？」", g:"best", d:12, t:2,
+         exp:"文書を示して尋問するには、民訴規則116条に従います。自分で作成した通知書を示されれば、否定はできません。購入価格との差額が、そのまま「高値で売りつける目的」を浮かび上がらせます。",
+         laws:["民訴規則116条","民訴規則115条2項"]},
+        {k:"B", label:"「あなたは、悪い人ですね？」", g:"bad", d:-10, t:0,
+         exp:"侮辱的で、意見を求める質問です（民訴規則115条2項1号・5号）。制限されるうえに、得るものもありません。",
+         laws:["民訴規則115条2項"]},
+        {k:"C", label:"「本件土地を初めて見に行ったのはいつですか？」", g:"meh", d:-2, t:0,
+         exp:"自由に答えさせる質問で、有馬に都合のいい説明の機会を与えるだけです。反対尋問の基本は、相手に説明させず、事実を一つずつ認めさせることです。",
+         laws:["民訴規則114条"]}
+      ]}),
+    S("arima","……相場より安く買えたので、高く売ろうとしただけです。商売ですから。"),
+    S("j3","（手元の記録に目を落とし、何かを書き留めた）"),
+    SC("court","さいたま地裁 第105号法廷","令和9年3月18日（木）午後1時10分　判決言渡し"),
+    {t:"verdict"},
+    Q({id:"c3q8", kind:"確認", prompt:"勝訴判決（登記手続を命じる判決）を得た。原告はいつ、どうやって登記を申請できるか。",
+      opts:[
+        {k:"A", label:"判決が確定したときに、被告が登記申請の意思表示をしたものとみなされる。判決正本と確定証明書を添付して、原告が単独で申請できる。", g:"best", d:4, t:0,
+         exp:"意思表示を命じる判決は、確定した時に意思表示をしたものとみなされます（民事執行法177条1項）。登記手続を命じる確定判決があれば、登記権利者が単独で申請できます（不動産登記法63条1項）。意思表示を命じる判決には、仮執行宣言を付けないのが原則です。",
+         laws:["民執法177条1項","不登法63条1項"]},
+        {k:"B", label:"仮執行宣言に基づき、言渡し当日すぐに申請できる。", g:"bad", d:-4, t:0,
+         exp:"意思表示を命じる判決は確定によって効力が生じます（民執法177条1項）。仮執行宣言にはなじまないとされています。",
+         laws:["民執法177条1項"]},
+        {k:"C", label:"判決があっても、有馬が登記に協力しない限り申請できない。", g:"bad", d:-4, t:0,
+         exp:"判決による登記は単独申請が可能です（不動産登記法63条1項）。そのための訴訟です。",
+         laws:["不登法63条1項"]}
+      ]}),
+  ],
+  verdict(st){
+    const pathOk = st.flags.karishobun ? st.flags.fixed : st.flags.tenToku;
+    const need = st.flags.karishobun ? this.threshold.win : this.threshold.winAlt;
+    const midNeed = st.flags.karishobun ? this.threshold.mid : this.threshold.midAlt;
+    if(st.flags.haishin && pathOk && st.flags.witness && st.score>=need) return {kind:"win", label:"勝　訴",
+      main: st.flags.karishobun
+        ? ["1　被告は、原告に対し、別紙物件目録記載の土地について、令和7年10月15日売買を原因とする所有権移転登記手続をせよ。","2　訴訟費用は被告の負担とする。"]
+        : ["1　被告株式会社エーエム・エステートは、原告に対し、別紙物件目録記載の土地について、真正な登記名義の回復を原因とする所有権移転登記手続をせよ。","2　訴訟費用は被告らの負担とする。"],
+      reason:"被告有馬は、原告が田所から本件土地を買い受けた事実を知りながら、原告に高値で売りつけて不当な利益を得る目的で、経済的に窮していた田所から著しく低廉な価格で本件土地を買い受けた。このような被告は、原告の登記の欠缺を主張することが信義に反すると認められる背信的悪意者であり、民法177条の第三者に当たらない。"+(st.flags.karishobun?"なお、被告から第三者への移転登記は処分禁止の仮処分の登記に後れるもので、原告に対抗できない。":"また、被告会社の代表者は有馬の妻であり、上記事情を知悉していたから、被告会社自身も背信的悪意者と評価される。"),
+      after:[S("c3","ここに、家を建てられるんですね。"),S("boss",st.flags.karishobun?"仮処分を先に打ったのが、最後に効いたな。保全は一番最初の勝負だ。":"転得者まで追い詰めたのは見事だ。だが、仮処分を打っていれば、もっと楽に勝てた。")]};
+    if(st.flags.haishin && st.score>=midNeed) return {kind:"mid", label:"和解成立",
+      main:["1　被告は、原告に対し、本件土地について所有権移転登記手続をする。","2　原告は、被告に対し、解決金として500万円を支払う。","3　訴訟費用は各自の負担とする。"],
+      reason:"背信的悪意者の主張は筋がよかったが、立証や手続（保全・転得者への対応）に穴があり、判決では勝ち切れない見通しになった。土地は取り戻したものの、有馬に解決金を払う形での決着となった。",
+      after:[S("c3","土地は戻った。でも、あの人にお金を払うなんて……。"),S("boss","保全と立証、どちらが欠けても、こういう結末になる。")]};
+    return {kind:"lose", label:"敗　訴",
+      main:["1　原告の請求を棄却する。","2　訴訟費用は原告の負担とする。"],
+      reason: !st.flags.haishin ? "被告は先に所有権移転登記を備えた。原告は登記なくして所有権の取得を被告に対抗できない（民法177条）。" : "原告は被告の背信性を主張するが、これを認めるに足りる証拠がなく、あるいは登記名義人に対する請求として目的を達しない。",
+      after:[S("c3","……先に、お金を払ったのは私なのに。"),S("boss","田所さんへの債務不履行責任の追及は残っている。だが、それで家は建たない。")]};
+  },
+  notes:[
+    "単純悪意者は177条の第三者に含まれるが、背信的悪意者は含まれない（最判昭和43年8月2日民集22巻8号1571頁）。",
+    "背信的悪意者からの転得者は、転得者自身が背信的悪意者と評価されない限り、177条の第三者として保護される（最判平成8年10月29日民集50巻9号2506頁）。",
+    "処分禁止の仮処分の登記後の処分は、仮処分債権者に対抗できない（民事保全法58条1項）。保全は本案より先に打つ。",
+    "登記手続を命じる判決は、確定時に意思表示が擬制され（民執法177条）、単独で申請できる（不登法63条1項）。"
+  ]
+};
+
+const CHAPTERS = [CH1, CH2, CH3];
+
+/* =====================================================================
+   エンジン
+   ===================================================================== */
+const app = document.getElementById("app");
+const STORE_KEY = "houtei-no-sentaku-v1";
+function loadBest(){ try{ return JSON.parse(localStorage.getItem(STORE_KEY)||"{}"); }catch(e){ return {}; } }
+function saveBest(b){ try{ localStorage.setItem(STORE_KEY, JSON.stringify(b)); }catch(e){} }
+
+let best = Object.assign(loadBest(), window.claude?.hot?.data?.best || {});
+let st = null;          // 進行中の状態
+let typing = null;      // タイプライタ制御
+const reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+window.claude?.hot?.snapshot?.(() => ({best}));
+
+function esc(s){ return String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+function newState(ch){
+  return {ch, frames:[{nodes:ch.nodes, i:0}], score:40, trust:60, flags:{}, scene:null, log:[], answers:[], laws:new Set(), checkpoint:null, speaker:null};
+}
+
+/* ---------- タイトル ---------- */
+function renderTitle(){
+  st = null;
+  const gradeOf = id => best[id] ? best[id].grade : "—";
+  app.innerHTML = `
+  <div class="title-wrap fade-in">
+    <div class="title-mark"><h1>法廷の選択</h1><span class="sub">民法・民事訴訟法　実務シミュレーション</span></div>
+    <p class="lede">あなたは弁護士登録して半年の新人、朝倉遥。有名判例をもとにした三つの事件で、依頼人の代理人として法廷に立ちます。答弁書を出すか、どの主張を立てるか、尋問で何を聞くか。手続と主張の選択の一つ一つが、判決主文を変えていきます。</p>
+    <div class="chapters">
+      ${CHAPTERS.map((c,i)=>`
+        <button class="chap" data-ch="${i}">
+          <span class="no">${c.no}</span>
+          <span style="min-width:0">
+            <h3>第${c.no}章　${c.title}</h3>
+            <div class="meta">${c.court}　／　${c.role}</div>
+            <div class="case">題材：${c.basis}</div>
+          </span>
+          <span class="best">${gradeOf(c.id)}<small>最高評価</small></span>
+        </button>`).join("")}
+    </div>
+    <div class="howto">
+      <div><b>心証（推定）</b>裁判所があなたの主張をどう受け止めているかの目安です。判決はこの値と、勝負どころの主張を出せたかで決まります。</div>
+      <div><b>依頼人の信頼</b>報告、相談、依頼人の目的に沿った判断で上がります。独断で動くと、解任されることもあります。</div>
+      <div><b>◎○△✕と解説</b>選択のたびに、条文と判例に基づく解説が出ます。致命的な悪手を選んでも、その選択の直前からやり直せます。</div>
+    </div>
+    <p class="disclaimer">登場人物・事件はすべて架空です。事案は判例を学習用に単純化して再構成したもので、実際の判決の当事者や事実関係とは異なります。条文・判例は令和8年時点の理解に基づいていますが、学習用の目安として扱い、実務では必ず原典を確認してください。</p>
+  </div>`;
+  app.querySelectorAll(".chap").forEach(b=>b.onclick=()=>startChapter(CHAPTERS[+b.dataset.ch]));
+}
+
+function startChapter(ch){
+  st = newState(ch);
+  step();
+}
+
+/* ---------- 進行 ---------- */
+function curNode(){
+  while(st.frames.length){
+    const f = st.frames[st.frames.length-1];
+    if(f.i < f.nodes.length) return f.nodes[f.i];
+    st.frames.pop();
+  }
+  return null;
+}
+function advance(){ st.frames[st.frames.length-1].i++; }
+function push(nodes){ if(nodes && nodes.length) st.frames.push({nodes, i:0}); }
+
+function step(){
+  const n = curNode();
+  if(!n){ return renderResult(); }
+  switch(n.t){
+    case "scene": st.scene = n; st.speaker=null; advance(); return step();
+    case "if": advance(); push(st.flags[n.flag] ? n.then : n.els); return step();
+    case "say": case "narr": return renderLine(n);
+    case "doc": return renderDoc(n);
+    case "choice": return renderChoice(n);
+    case "verdict": return renderVerdict();
+  }
+}
+
+/* ---------- 共通レイアウト ---------- */
+function hud(){
+  const sc = st.scene || {};
+  return `<div class="hud">
+    <div class="where"><div class="court">第${st.ch.no}章　${st.ch.title}</div><div class="date">${esc(st.ch.caseName)}${sc.date?"　｜　"+esc(sc.date):""}</div></div>
+    <div class="meters">
+      <div class="meter"><span>心証（推定）　${Math.round(clamp(st.score))}</span><div class="bar"><i style="width:${clamp(st.score)}%"></i></div></div>
+      <div class="meter trust"><span>依頼人の信頼　${Math.round(st.trust)}</span><div class="bar"><i style="width:${clamp(st.trust)}%"></i></div></div>
+      <div class="hud-btns"><button class="ghost" id="b-roppo">六法</button><button class="ghost" id="b-log">記録</button><button class="ghost" id="b-menu">中断</button></div>
+    </div>
+  </div>`;
+}
+function clamp(v){ return Math.max(0, Math.min(100, v)); }
+function stage(who, slim){
+  const sc = st.scene || {bg:"office", place:""};
+  const isLeft = who==="me" || who==="boss";
+  return `<div class="stage${slim?" slim":""}">
+    ${bgSVG(sc.bg, {panel: st.ch.panel})}
+    <div class="place">${esc(sc.place||"")}</div>
+    <div class="portrait ${isLeft?"left":"right"} ${who?"":"hide"}">${who?portraitSVG(who):""}</div>
+  </div>`;
+}
+function wireHud(){
+  document.getElementById("b-roppo").onclick = showRoppo;
+  document.getElementById("b-log").onclick = showLog;
+  document.getElementById("b-menu").onclick = showMenu;
+}
+
+/* ---------- 台詞 ---------- */
+function renderLine(n){
+  const who = n.t==="say" ? n.who : null;
+  const c = who ? CAST[who] : null;
+  st.log.push({who: c ? c.name : "", text:n.text});
+  app.innerHTML = hud() + stage(who) + `
+    <div class="box" id="box" role="button" tabindex="0" aria-label="次へ">
+      ${c?`<div class="name">${esc(c.name)}<small>${esc(c.role)}</small></div>`:""}
+      <div class="text ${c?"":"narr"}" id="txt"></div>
+      <div class="next" id="nx" hidden>クリックで次へ</div>
+    </div>`;
+  wireHud();
+  const box = document.getElementById("box"), txt = document.getElementById("txt"), nx = document.getElementById("nx");
+  let i = 0; const full = n.text;
+  const done = () => { clearInterval(typing); typing=null; txt.textContent = full; nx.hidden=false; };
+  if(reduce){ done(); } else { typing = setInterval(()=>{ i+=2; txt.textContent = full.slice(0,i); if(i>=full.length) done(); }, 22); }
+  const go = () => { if(typing){ done(); return; } advance(); step(); };
+  box.onclick = go;
+  box.onkeydown = e => { if(e.key==="Enter"||e.key===" "){ e.preventDefault(); go(); } };
+  box.focus({preventScroll:true});
+}
+
+/* ---------- 書面 ---------- */
+function renderDoc(n){
+  app.innerHTML = hud() + `
+    <div class="doc fade-in"><h4>${n.title}</h4><div class="caseline">${esc(n.caseline)}</div>${n.html}</div>
+    <button class="primary" id="go">書面を閉じる</button>`;
+  wireHud();
+  document.getElementById("go").onclick = () => { advance(); step(); };
+}
+
+/* ---------- 選択肢 ---------- */
+function renderChoice(n){
+  st.checkpoint = snapshotState();
+  app.innerHTML = hud() + stage(null, true) + `
+    <div class="choice fade-in">
+      <div class="q"><span class="kind">${esc(n.kind)}</span>${esc(n.prompt)}</div>
+      <div class="opts">${n.opts.map((o,i)=>`<button class="opt" data-i="${i}"><span class="k">${o.k}</span><span>${esc(o.label)}</span></button>`).join("")}</div>
+    </div>`;
+  wireHud();
+  app.querySelectorAll(".opt").forEach(b=>b.onclick=()=>choose(n, n.opts[+b.dataset.i]));
+}
+function snapshotState(){
+  return {frames: st.frames.map(f=>({nodes:f.nodes, i:f.i})), score:st.score, trust:st.trust, flags:{...st.flags}, scene:st.scene, answers:[...st.answers], logLen: st.log.length};
+}
+function restoreCheckpoint(){
+  const c = st.checkpoint;
+  st.frames = c.frames.map(f=>({nodes:f.nodes, i:f.i}));
+  st.score=c.score; st.trust=c.trust; st.flags={...c.flags}; st.scene=c.scene; st.answers=[...c.answers]; st.log.length = c.logLen;
+  step();
+}
+function choose(n, o){
+  (o.laws||[]).forEach(l=>st.laws.add(l));
+  const g = G[o.g];
+  if(o.fatal){ return renderGameOver(n, o); }
+  st.score = st.score + (o.d||0);  // 内部値は上限なし（表示のみ0〜100）
+  st.trust = clamp(st.trust + (o.t||0));
+  if(o.flag) st.flags[o.flag] = true;
+  st.answers.push({q:n.prompt, k:o.k, label:o.label, g:o.g});
+  st.log.push({who:"選択", text:`${n.prompt}\n→ ${o.k}. ${o.label}`});
+  const sign = v => (v>0?"+":"")+v;
+  app.innerHTML = hud() + `
+    <div class="fb fade-in">
+      <div class="head"><span class="mark ${g.c}">${g.m}</span><div><div class="verdict ${g.c}">${g.l}</div><div class="delta">心証 ${sign(o.d||0)}　／　依頼人の信頼 ${sign(o.t||0)}</div></div></div>
+      <div class="pick">${o.k}．${esc(o.label)}</div>
+      <div class="exp">${esc(o.exp)}</div>
+      ${(o.laws&&o.laws.length)?`<div class="laws">${o.laws.map(l=>`<span class="law">${esc(l)}</span>`).join("")}</div>`:""}
+      <div class="btnrow">${o.g!=="best"?`<button class="ghost" id="retry">この選択をやり直す</button>`:""}<button class="primary" id="go">続ける</button></div>
+    </div>`;
+  wireHud();
+  document.getElementById("go").onclick = () => { advance(); step(); };
+  const r = document.getElementById("retry"); if(r) r.onclick = restoreCheckpoint;
+}
+
+/* ---------- ゲームオーバー ---------- */
+function renderGameOver(n, o){
+  app.innerHTML = `
+    <div class="result fade-in">
+      <p class="big lose">敗　北</p>
+      <div class="doc"><p style="white-space:pre-wrap">${esc(o.over)}</p></div>
+      <div class="fb">
+        <div class="head"><span class="mark g-bad">✕</span><div class="verdict g-bad">致命的な選択</div></div>
+        <div class="pick">${o.k}．${esc(o.label)}</div>
+        <div class="exp">${esc(o.exp)}</div>
+        <div class="laws">${(o.laws||[]).map(l=>`<span class="law">${esc(l)}</span>`).join("")}</div>
+      </div>
+      <div class="btnrow"><button class="ghost" id="menu">タイトルへ</button><button class="primary" id="retry">この選択の直前からやり直す</button></div>
+    </div>`;
+  document.getElementById("retry").onclick = restoreCheckpoint;
+  document.getElementById("menu").onclick = renderTitle;
+}
+
+/* ---------- 判決 ---------- */
+function renderVerdict(){
+  const v = st.ch.verdict(st);
+  st.result = v;
+  const judge = st.ch.id==="ch1"?"j1":st.ch.id==="ch2"?"j2":"j3";
+  app.innerHTML = hud() + stage(judge) + `
+    <div class="box" style="cursor:default"><div class="name">${esc(CAST[judge].name)}<small>${esc(CAST[judge].role)}</small></div>
+      <div class="text">${v.kind==="mid" ? "本件は、和解が成立しましたので、その内容を確認します。" : "それでは判決を言い渡します。主文。"}</div></div>
+    <div class="doc fade-in">
+      <h4>${v.kind==="mid"?"和解条項":"判　　決"}</h4>
+      <div class="caseline">${esc(st.ch.caseName)}</div>
+      <p class="sec">${v.kind==="mid"?"和解条項":"主　文"}</p>
+      ${v.main.map(m=>`<p>${esc(m)}</p>`).join("")}
+      <p class="sec">${v.kind==="mid"?"経　緯":"理由の要旨"}</p>
+      <p>${esc(v.reason)}</p>
+    </div>
+    <p class="big ${v.kind}" style="font-family:var(--f-display);font-weight:800;font-size:clamp(28px,6vw,44px);letter-spacing:.2em;text-align:center;margin:4px 0" >${v.label}</p>
+    <button class="primary" id="go">続ける</button>`;
+  wireHud();
+  document.getElementById("go").onclick = () => { advance(); push(v.after); step(); };
+}
+
+/* ---------- 章の結果 ---------- */
+function renderResult(){
+  const v = st.result || {kind:"lose", label:"—"};
+  const counts = {best:0, ok:0, meh:0, bad:0};
+  st.answers.forEach(a=>counts[a.g]++);
+  const total = st.answers.length || 1;
+  const ratio = (counts.best + counts.ok*0.5)/total;
+  let grade = v.kind==="win" ? (ratio>=0.95?"S":ratio>=0.8?"A":"B") : v.kind==="mid" ? "C" : "D";
+  const prev = best[st.ch.id];
+  const order = "DCBAS";
+  if(!prev || order.indexOf(grade) > order.indexOf(prev.grade)){ best[st.ch.id] = {grade}; saveBest(best); }
+  const idx = CHAPTERS.indexOf(st.ch);
+  const nextCh = CHAPTERS[idx+1];
+  app.innerHTML = `
+  <div class="result fade-in">
+    <div class="title-mark"><h1 style="font-size:clamp(26px,5vw,40px)">第${st.ch.no}章　${st.ch.title}</h1><span class="sub">事件記録の総括</span></div>
+    <p class="big ${v.kind}">${v.label}</p>
+    <div class="stats">
+      <div class="stat"><div class="l">総合評価</div><div class="v">${grade}</div></div>
+      <div class="stat"><div class="l">心証（推定）</div><div class="v">${Math.round(clamp(st.score))}</div></div>
+      <div class="stat"><div class="l">依頼人の信頼</div><div class="v">${Math.round(st.trust)}</div></div>
+      <div class="stat"><div class="l">最善手</div><div class="v">${counts.best} / ${st.answers.length}</div></div>
+    </div>
+    <div class="notes">
+      <h4>あなたの選択</h4>
+      <div class="review">${st.answers.map(a=>`<div class="row"><span class="${G[a.g].c}">${G[a.g].m}</span><div>${esc(a.q)}<br><span style="color:var(--muted)">${a.k}．${esc(a.label)}</span></div></div>`).join("")}</div>
+    </div>
+    <div class="notes">
+      <h4>判例ノート</h4>
+      <ul>${st.ch.notes.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>
+    </div>
+    <div class="btnrow">
+      <button class="ghost" id="t">タイトルへ</button>
+      <button class="ghost" id="r">もう一度この章を</button>
+      ${nextCh?`<button class="primary" id="n">第${nextCh.no}章へ</button>`:""}
+    </div>
+  </div>`;
+  document.getElementById("t").onclick = renderTitle;
+  document.getElementById("r").onclick = () => startChapter(st.ch);
+  if(nextCh) document.getElementById("n").onclick = () => startChapter(nextCh);
+  window.scrollTo({top:0});
+}
+
+/* ---------- モーダル ---------- */
+function modal(html){
+  const m = document.createElement("div");
+  m.className = "modal";
+  m.innerHTML = `<div class="card" role="dialog" aria-modal="true">${html}<div class="btnrow" style="margin-top:14px"><button class="primary" id="mclose">閉じる</button></div></div>`;
+  document.body.appendChild(m);
+  const close = () => m.remove();
+  m.querySelector("#mclose").onclick = close;
+  m.onclick = e => { if(e.target===m) close(); };
+  m.querySelector("#mclose").focus();
+}
+const ROPPO = {
+  "民法612条":"賃借人は、賃貸人の承諾を得なければ、賃借権を譲り渡し、又は賃借物を転貸できない（1項）。違反して第三者に使用・収益させたとき、賃貸人は契約を解除できる（2項）。",
+  "民法94条2項":"相手方と通じてした虚偽の意思表示の無効は、善意の第三者に対抗できない。不実登記の事案に類推適用される。",
+  "民法110条":"代理人が権限外の行為をした場合に、第三者が代理人の権限があると信ずべき正当な理由があるときは、表見代理が成立する。94条2項と併せて類推されると、第三者に善意無過失が求められる。",
+  "民法177条":"不動産に関する物権の得喪・変更は、登記をしなければ第三者に対抗できない。背信的悪意者は「第三者」に当たらない。",
+  "民法192条":"取引行為によって平穏・公然に動産の占有を始めた者は、善意無過失であれば、即時にその動産の権利を取得する（即時取得）。不動産には適用されない。",
+  "民訴158条":"最初の口頭弁論期日に当事者の一方が欠席したとき、裁判所は、その者が提出した訴状・答弁書等の記載事項を陳述したものとみなせる。",
+  "民訴159条":"相手方の主張した事実を争うことを明らかにしないときは、自白したものとみなす（1項）。期日に出頭しない場合にも準用される（3項）。",
+  "民訴179条":"裁判所において当事者が自白した事実と、顕著な事実は、証明を要しない。",
+  "民訴157条":"故意又は重大な過失により時機に後れて提出した攻撃防御方法は、訴訟の完結を遅延させるときは、却下できる。",
+  "民訴53条":"当事者は、訴訟の係属中、参加できる第三者に訴訟告知ができる。告知を受けた者が参加しなくても、46条の効力（参加的効力）が及ぶ（4項）。",
+  "民訴89条":"裁判所は、訴訟がいかなる程度にあるかを問わず、和解を試みることができる。",
+  "民訴285条":"控訴は、判決書の送達を受けた日から2週間の不変期間内に提起しなければならない。",
+  "民訴規則114条・115条":"反対尋問の範囲（114条）と、誘導・侮辱・意見を求める質問などの制限（115条）。",
+  "民事保全法13条・14条":"保全命令の申立てでは保全すべき権利と保全の必要性を疎明する（13条）。保全命令は担保を立てさせて発令できる（14条）。",
+  "民事保全法58条":"処分禁止の仮処分の登記後にされた登記に係る権利の取得・処分は、仮処分債権者に対抗できない（1項）。",
+  "民事執行法177条":"意思表示を命じる判決は、確定した時に意思表示をしたものとみなす。",
+  "不動産登記法63条1項":"登記手続を命じる確定判決による登記は、登記権利者が単独で申請できる。"
+};
+function showRoppo(){
+  modal(`<h3>ポケット六法</h3><dl>${Object.entries(ROPPO).map(([k,v])=>`<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join("")}</dl>
+    ${st && st.laws.size ? `<h3 style="margin-top:16px">この章で出てきた条文・判例</h3><div class="laws">${[...st.laws].map(l=>`<span class="law">${esc(l)}</span>`).join("")}</div>`:""}`);
+}
+function showLog(){
+  modal(`<h3>記録</h3>${st.log.slice(-60).map(l=>`<div class="logline">${l.who?`<b>${esc(l.who)}</b>`:""}<span style="white-space:pre-wrap">${esc(l.text)}</span></div>`).join("")}`);
+}
+function showMenu(){
+  modal(`<h3>中断しますか</h3><p>章の途中経過は保存されません。タイトルに戻ると、この章は最初からになります。</p><div class="btnrow"><button class="ghost" id="toTitle">タイトルへ戻る</button></div>`);
+  document.getElementById("toTitle").onclick = () => { document.querySelector(".modal")?.remove(); if(typing){clearInterval(typing);typing=null;} renderTitle(); };
+}
+
+const boot = () => renderTitle();
+window.claude?.hot?.ready ? window.claude.hot.ready(boot) : boot();
+</script>
